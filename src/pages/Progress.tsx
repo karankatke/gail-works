@@ -104,7 +104,16 @@ export function ProgressPage() {
   }, [filtered, period]);
 
   const latestBill = bills[0] ?? null;
-  const cutoff = latestBill?.period_end ?? null;
+  const hasBills = bills.length > 0;
+
+  const latestByContract = useMemo(() => {
+    const map: Record<Contract, string | null> = { PE: null, LMC: null };
+    for (const b of bills) {
+      const cur = map[b.contract];
+      if (!cur || b.period_end > cur) map[b.contract] = b.period_end;
+    }
+    return map;
+  }, [bills]);
 
   const bill = useMemo(() => {
     let since = 0;
@@ -113,8 +122,9 @@ export function ProgressPage() {
       const item = ITEM_MAP[line.item_id];
       if (!item) continue;
       const value = Number(line.qty) * item.rate * claimPct(item.stages, line.stage_index);
-      if (cutoff && day.work_date > cutoff) since += value;
-      if (cutoff && day.work_date <= cutoff) baseline += value;
+      const cutoffFor = latestByContract[day.contract];
+      if (cutoffFor && day.work_date <= cutoffFor) baseline += value;
+      else since += value;
     }
     const gst = since * 0.18;
     const gross = since + gst;
@@ -123,7 +133,7 @@ export function ProgressPage() {
     const gstTds = since * 0.02;
     const net = gross - it - cess - gstTds;
     return { since, baseline, gst, gross, it, cess, gstTds, net };
-  }, [filtered, cutoff]);
+  }, [filtered, latestByContract]);
 
   const weeks = useMemo(() => {
     const start = addDays(weekStart(today), -7 * 7);
@@ -295,7 +305,7 @@ export function ProgressPage() {
                 {latestBill ? `Next bill after ${latestBill.bill_no}` : "Next RA bill"}
               </p>
               <p className="text-[10px] text-slate-400">
-                since {latestBill ? latestBill.period_end : "start"}
+                since last bill
               </p>
             </div>
             <p className="mt-2 text-2xl font-bold text-slate-900">{formatINR(bill.since)}</p>
@@ -311,7 +321,7 @@ export function ProgressPage() {
                 <span className="font-bold text-brand-700">{formatINR(bill.net)}</span>
               </div>
             </div>
-            {cutoff ? (
+            {hasBills ? (
               <p className="mt-2 text-[10px] text-slate-400">
                 RA-01 baseline: {formatINR(bill.baseline)} · cumulative claimed{" "}
                 {formatINR(bill.baseline + bill.since)}
