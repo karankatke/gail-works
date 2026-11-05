@@ -150,7 +150,7 @@ export function ProgressPage() {
       string,
       { qty: number; full: number; claim: number; stages: number[]; contract: Contract }
     >();
-    for (const { line, day } of filtered) {
+    for (const { line } of filtered) {
       const item = ITEM_MAP[line.item_id];
       if (!item) continue;
       const cur = map.get(item.id) ?? {
@@ -166,7 +166,6 @@ export function ProgressPage() {
       cur.claim += Number(line.qty) * item.rate * pct;
       cur.stages.push(pct);
       map.set(item.id, cur);
-      void day;
     }
     return [...map.entries()]
       .map(([id, v]) => ({ item: ITEM_MAP[id], ...v }))
