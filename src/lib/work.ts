@@ -107,6 +107,28 @@ export async function fetchBills(): Promise<BillRow[]> {
   return (data ?? []) as BillRow[];
 }
 
+export async function addBill(input: {
+  contract: BillRow["contract"];
+  bill_no: string;
+  period_end: string;
+  invoice_date: string | null;
+}): Promise<void> {
+  const client = requireClient();
+  const { error } = await client.from("sor_bills").insert({
+    contract: input.contract,
+    bill_no: input.bill_no.trim(),
+    period_end: input.period_end,
+    invoice_date: input.invoice_date || null,
+  });
+  if (error) throw error;
+}
+
+export async function deleteBill(id: string): Promise<void> {
+  const client = requireClient();
+  const { error } = await client.from("sor_bills").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function fetchLabour(from: string, to: string): Promise<LabourCost> {
   const client = requireClient();
   const [report, bata] = await Promise.all([

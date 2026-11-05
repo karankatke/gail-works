@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { Button, Card } from "../components/ui";
+import { Button, Card, inputClass } from "../components/ui";
 import { useAuth } from "../context/AuthContext";
-import { CONTRACTS } from "../lib/rates";
+import { CONTRACTS, type Contract } from "../lib/rates";
 import { formatLakh, formatINR } from "../lib/format";
-import { prettyDateLong } from "../lib/dates";
-import { fetchBills, fetchWork } from "../lib/work";
+import { prettyDateLong, todayISO } from "../lib/dates";
+import { addBill, deleteBill, fetchBills, fetchWork } from "../lib/work";
 import type { BillRow } from "../lib/types";
 
 export function MorePage() {
@@ -29,6 +29,16 @@ export function MorePage() {
   const totalBasic = CONTRACTS.PE.basicValue + CONTRACTS.LMC.basicValue;
   const totalGst = CONTRACTS.PE.gst + CONTRACTS.LMC.gst;
   const totalValue = CONTRACTS.PE.totalValue + CONTRACTS.LMC.totalValue;
+
+  const removeBill = async (id: string) => {
+    if (!window.confirm("Remove this bill cutoff? Work will go back into the next bill.")) return;
+    try {
+      await deleteBill(id);
+      await load();
+    } catch {
+      // keep the page usable
+    }
+  };
 
   return (
     <div className="space-y-3">
@@ -78,13 +88,17 @@ export function MorePage() {
                     up to {prettyDateLong(b.period_end)}
                   </p>
                 </div>
-                <span className="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700">
-                  baseline
-                </span>
+                <button
+                  onClick={() => removeBill(b.id)}
+                  className="text-[10px] font-medium text-red-500"
+                >
+                  remove
+                </button>
               </div>
             ))
           )}
         </div>
+        <BillForm onSaved={load} />
       </Card>
 
       <Card className="p-4">
@@ -142,6 +156,85 @@ export function MorePage() {
       <p className="px-1 pb-2 text-center text-[10px] text-slate-400">
         GAIL Works · LOA rates, weekly work and RA bill
       </p>
+    </div>
+  );
+}
+
+function BillForm({ onSaved }: { onSaved: () => Promise<void> | void }) {
+  const [contract, setContract] = useState<Contract>("PE");
+  const [billNo, setBillNo] = useState("RA-02");
+  const [periodEnd, setPeriodEnd] = useState(todayISO());
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async () => {
+    if (!billNo.trim()) {
+      setError("Bill number is required.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await addBill({
+        contract,
+        bill_no: billNo,
+        period_end: periodEnd,
+        invoice_date: null,
+      });
+      await onSaved();
+      setBillNo((n) => {
+        const m = n.match(/^(.*?)(\d+)$/);
+        return m ? `${m[1]}${String(Number(m[2]) + 1).padStart(m[2].length, "0")}` : n;
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save the bill");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 border-t border-slate-100 pt-3">
+      <p className="text-xs font-semibold text-slate-700">Close a bill</p>
+      <p className="mb-2 text-[10px] text-slate-400">
+        After you submit a bill, add its cutoff. New work then starts the next bill.
+      </p>
+      <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1">
+        {(["PE", "LMC"] as Contract[]).map((c) => (
+          <button
+            key={c}
+            onClick={() => setContract(c)}
+            className={`rounded-md py-1.5 text-[11px] font-semibold ${
+              contract === c ? "bg-white text-brand-700 shadow-sm" : "text-slate-500"
+            }`}
+          >
+            {c}
+          </button>
+        ))}
+      </div>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <label className="block">
+          <span className="mb-1 block text-[10px] font-medium text-slate-500">Bill no.</span>
+          <input
+            value={billNo}
+            onChange={(e) => setBillNo(e.target.value)}
+            className={`${inputClass} py-1.5 text-sm`}
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-[10px] font-medium text-slate-500">Period end</span>
+          <input
+            type="date"
+            value={periodEnd}
+            onChange={(e) => setPeriodEnd(e.target.value)}
+            className={`${inputClass} py-1.5 text-sm`}
+          />
+        </label>
+      </div>
+      {error ? <p className="mt-2 text-xs text-red-600">{error}</p> : null}
+      <Button onClick={save} disabled={busy} className="mt-2 w-full py-2 text-xs">
+        {busy ? "Saving…" : "Save bill cutoff"}
+      </Button>
     </div>
   );
 }
