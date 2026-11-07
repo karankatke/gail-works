@@ -124,6 +124,8 @@ export function LogPage() {
   const inProgress = siteActivities.filter((a) => activityStatus(a) === "in_progress");
   const planned = siteActivities.filter((a) => activityStatus(a) === "planned");
   const doneActivities = siteActivities.filter((a) => activityStatus(a) === "done");
+  const activeItemIds = new Set([...inProgress, ...planned].map((a) => a.item_id));
+  const quickRepeatItems = recentItems.filter((r) => !activeItemIds.has(r.item.id));
 
   const switchContract = (c: Contract) => {
     if (c === contract) return;
@@ -352,8 +354,12 @@ export function LogPage() {
               <p className="border-t border-slate-100 px-3 py-3 text-center text-xs text-slate-400">
                 No work logged at this site yet.
               </p>
+            ) : quickRepeatItems.length === 0 ? (
+              <p className="border-t border-slate-100 px-3 py-3 text-center text-xs text-slate-400">
+                All recent items are already in the plan above.
+              </p>
             ) : (
-              recentItems.slice(0, 8).map((r) => (
+              quickRepeatItems.slice(0, 8).map((r) => (
                 <button
                   key={r.item.id}
                   onClick={() => {
