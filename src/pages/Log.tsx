@@ -120,7 +120,7 @@ export function LogPage() {
                 contract === c ? "bg-white text-brand-700 shadow-sm" : "text-slate-500"
               }`}
             >
-              {c === "PE" ? "PE · pipeline" : "LMC · last mile"}
+              {c === "PE" ? "PE pipe laying" : "LMC"}
             </button>
           ))}
         </div>

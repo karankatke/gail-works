@@ -13,7 +13,6 @@ import {
   type Contract,
   type RateItem,
 } from "../lib/rates";
-import { formatINR, formatLakh, formatQty } from "../lib/format";
 
 const MATRIX_SIZES = [20, 32, 63, 90, 125];
 
@@ -71,8 +70,9 @@ export function RatesPage() {
   }, []);
 
   const kit = kitMode === "new" ? KIT_NEW : KIT_EXISTING;
-  const kitRows = kit.map((k) => ({ item: ITEM_MAP[k.id], qty: k.qty })).filter((x) => x.item);
-  const kitTotal = kitRows.reduce((s, r) => s + r.item.rate * r.qty, 0);
+  const kitRows = kit
+    .map((k) => ITEM_MAP[k.id])
+    .filter((x): x is RateItem => Boolean(x));
 
   return (
     <div className="space-y-3">
@@ -86,7 +86,7 @@ export function RatesPage() {
                 contract === c ? "bg-white text-brand-700 shadow-sm" : "text-slate-500"
               }`}
             >
-              {c === "PE" ? "PE · pipeline" : "LMC · last mile"}
+              {c === "PE" ? "PE pipe laying" : "LMC"}
             </button>
           ))}
         </div>
@@ -173,13 +173,8 @@ export function RatesPage() {
       {!results && contract === "LMC" ? (
         <Card className="overflow-hidden">
           <div className="px-3 pt-3">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="text-sm font-bold text-slate-900">What one flat is worth</p>
-                <p className="text-[11px] text-slate-500">Common items for one connection</p>
-              </div>
-              <p className="text-right text-lg font-bold text-brand-700">{formatLakh(kitTotal)}</p>
-            </div>
+            <p className="text-sm font-bold text-slate-900">Common connection items</p>
+            <p className="text-[11px] text-slate-500">One-unit rates · tap for stages</p>
             <div className="mt-2 grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1">
               <button
                 onClick={() => setKitMode("existing")}
@@ -200,26 +195,12 @@ export function RatesPage() {
             </div>
           </div>
           <div className="mt-2 border-t border-slate-100">
-            {kitRows.map((r) => (
-              <button
-                key={r.item.id}
-                onClick={() => setDetail(r.item)}
-                className="flex w-full items-center justify-between gap-2 border-b border-slate-50 px-3 py-2 text-left last:border-0 active:bg-slate-50"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-medium text-slate-800">{r.item.name}</p>
-                  <p className="truncate text-[10px] text-slate-400">
-                    {formatQty(r.qty)} {r.item.uom} × {formatINR(r.item.rate)}
-                  </p>
-                </div>
-                <p className="shrink-0 text-xs font-semibold text-slate-700">
-                  {formatINR(r.qty * r.item.rate)}
-                </p>
-              </button>
+            {kitRows.map((item) => (
+              <RateRow key={item.id} item={item} onClick={() => setDetail(item)} />
             ))}
           </div>
           <p className="border-t border-slate-100 px-3 py-2 text-[10px] text-slate-400">
-            Typical quantities only. Actual claim follows what is measured per flat.
+            Each rate is for one unit. Multiply by the quantity you measured.
           </p>
         </Card>
       ) : null}

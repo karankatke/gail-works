@@ -75,7 +75,7 @@ export function ItemDetail({ item, onClose }: { item: RateItem; onClose: () => v
             <span className="ml-1 text-sm font-normal text-slate-400">/ {item.uom}</span>
           </p>
           <p className="mt-1 text-[11px] text-slate-400">
-            LOA quantity: {formatQty(item.loaQty)} {item.uom}
+            Contract target: {formatQty(item.loaQty)} {item.uom}
           </p>
         </div>
 
