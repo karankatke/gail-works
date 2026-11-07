@@ -41,7 +41,7 @@ export function formatLakh(value: number): string {
 export function formatQty(value: number): string {
   const n = Number(value ?? 0);
   if (!Number.isFinite(n)) return "0";
-  return n.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+  return n.toLocaleString("en-IN", { maximumFractionDigits: 3 });
 }
 
 export function formatPct(value: number): string {

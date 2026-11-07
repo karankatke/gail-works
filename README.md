@@ -6,10 +6,12 @@ It shares the same Supabase project and owner login as the attendance app, but l
 
 ## What it does
 
-- **Rates** — final LOA rates for both contracts, PE (pipeline) and LMC (last mile). Search in trade language ("32", "1 inch", "meter"), a pipe rate matrix, and a one-flat connection value card.
-- **Log work** — log what was done on any date, for any site, at the stage reached. The app keeps both the full work value and what is claimable now.
-- **Progress** — cumulative work vs the LOA value, the next RA bill (value, GST, deductions, net), weekly claimable trend, item-wise progress, and labour cost from the attendance app.
-- **More** — project value, RA bill baseline, how the numbers work, account.
+- **Rates** — final LOA rates for both contracts, PE (pipeline) and LMC (last mile). Search in trade language ("32", "1 inch", "meter"), a pipe rate matrix, and the full SOR description on every item. All rates show the document precision (2–3 decimals), never rounded to rupees.
+- **Log work** — a site board with a **plan** and **quick repeat**. Create activities with a target quantity from the work order, then tap **+ Today** each day to add progress. Quantities can be entered in **feet/inches** (including length × width × depth for excavation) and are converted to the SOR unit automatically.
+- **Progress** — cumulative work vs the LOA value, the next RA bill (value, GST, deductions, net), claimable by clear 7-day periods, item-wise quantities/sites/value, and labour cost from the attendance app.
+- **More** — project value, RA bill plan and cutoffs, how the numbers work, account.
+
+Phone **back** closes any popup and leaves you in the app; the old X buttons are gone.
 
 ## The money rules
 
@@ -39,10 +41,11 @@ VITE_SUPABASE_ANON_KEY=...
 
 ### Database
 
-Run `supabase/sor_schema.sql` once in the Supabase SQL editor (or apply it as a migration). It creates three owner-only tables:
+Run `supabase/sor_schema.sql` once in the Supabase SQL editor (or apply it as a migration). It creates four owner-only tables:
 
 - `sor_work_days` — one day per contract
-- `sor_work_lines` — item, quantity, highest stage reached
+- `sor_activities` — the site plan: one SOR item with an optional target quantity
+- `sor_work_lines` — item, quantity (in the SOR unit), original feet/inches input, highest stage reached, linked activity
 - `sor_bills` — RA bill cutoffs
 
 RLS uses the existing `public.is_owner()` function from the attendance app.

@@ -2,6 +2,7 @@ import { requireClient } from "./supabase";
 import { claimPct, claimPerUnit } from "./rates";
 import type { RateItem } from "./rates";
 import type {
+  ActivityRow,
   BillRow,
   DayWithLines,
   LabourCost,
@@ -36,7 +37,7 @@ export async function fetchWorkLines(): Promise<WorkLineRow[]> {
   const client = requireClient();
   const { data, error } = await client
     .from("sor_work_lines")
-    .select("id,day_id,item_id,qty,stage_index,note");
+    .select("id,day_id,item_id,qty,stage_index,note,input_text,activity_id");
   if (error) throw error;
   return (data ?? []) as WorkLineRow[];
 }
@@ -57,7 +58,14 @@ export async function saveWorkDay(input: {
   contract: WorkDayRow["contract"];
   location_id: string | null;
   note: string | null;
-  lines: { item_id: string; qty: number; stage_index: number; note: string | null }[];
+  lines: {
+    item_id: string;
+    qty: number;
+    stage_index: number;
+    note: string | null;
+    input_text?: string | null;
+    activity_id?: string | null;
+  }[];
 }): Promise<string> {
   const client = requireClient();
   const { data: day, error: dayErr } = await client
@@ -81,6 +89,8 @@ export async function saveWorkDay(input: {
         qty: l.qty,
         stage_index: l.stage_index,
         note: l.note,
+        input_text: l.input_text ?? null,
+        activity_id: l.activity_id ?? null,
       })),
     );
     if (lineErr) {
@@ -105,6 +115,59 @@ export async function fetchBills(): Promise<BillRow[]> {
     .order("period_end", { ascending: false });
   if (error) throw error;
   return (data ?? []) as BillRow[];
+}
+
+export async function fetchActivities(): Promise<ActivityRow[]> {
+  const client = requireClient();
+  const { data, error } = await client
+    .from("sor_activities")
+    .select("*")
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as ActivityRow[];
+}
+
+export async function addActivity(input: {
+  contract: ActivityRow["contract"];
+  location_id: string;
+  item_id: string;
+  title: string;
+  phase: string | null;
+  planned_qty: number | null;
+  uom: string;
+  stage_index: number;
+  start_date: string | null;
+  target_date: string | null;
+  note: string | null;
+}): Promise<void> {
+  const client = requireClient();
+  const { error } = await client.from("sor_activities").insert(input);
+  if (error) throw error;
+}
+
+export async function updateActivity(
+  id: string,
+  patch: Partial<{
+    title: string;
+    phase: string | null;
+    planned_qty: number | null;
+    stage_index: number;
+    start_date: string | null;
+    target_date: string | null;
+    status: ActivityRow["status"];
+    note: string | null;
+    completed_at: string | null;
+  }>,
+): Promise<void> {
+  const client = requireClient();
+  const { error } = await client.from("sor_activities").update(patch).eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteActivity(id: string): Promise<void> {
+  const client = requireClient();
+  const { error } = await client.from("sor_activities").delete().eq("id", id);
+  if (error) throw error;
 }
 
 export async function addBill(input: {

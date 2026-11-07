@@ -31,6 +31,8 @@ export interface WorkLineRow {
   qty: number;
   stage_index: number;
   note: string | null;
+  input_text: string | null;
+  activity_id: string | null;
 }
 
 export interface BillRow {
@@ -39,6 +41,24 @@ export interface BillRow {
   bill_no: string;
   period_end: string;
   invoice_date: string | null;
+}
+
+export interface ActivityRow {
+  id: string;
+  contract: Contract;
+  location_id: string;
+  item_id: string;
+  title: string;
+  phase: string | null;
+  planned_qty: number | null;
+  uom: string;
+  stage_index: number;
+  start_date: string | null;
+  target_date: string | null;
+  status: "planned" | "in_progress" | "done";
+  note: string | null;
+  created_at: string;
+  completed_at: string | null;
 }
 
 export interface LabourCost {

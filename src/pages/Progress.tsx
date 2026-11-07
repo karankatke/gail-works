@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, Spinner } from "../components/ui";
 import { ITEM_MAP, claimPerUnit, CONTRACTS, type Contract } from "../lib/rates";
-import { formatINR, formatLakh, formatQty } from "../lib/format";
+import { formatINR, formatINR2, formatLakh, formatQty } from "../lib/format";
 import {
   monthChunks,
   monthRange,
@@ -351,23 +351,23 @@ export function ProgressPage() {
                   : "since start"}
               </p>
             </div>
-            <p className="mt-2 text-2xl font-bold text-slate-900">{formatINR(bill.since)}</p>
+            <p className="mt-2 text-2xl font-bold text-slate-900">{formatINR2(bill.since)}</p>
             <p className="text-[11px] text-slate-500">work value since last bill</p>
             <div className="mt-3 space-y-1 text-xs">
-              <Row label="GST 18%" value={formatINR(bill.gst)} />
-              <Row label="Gross" value={formatINR(bill.gross)} strong />
-              <Row label="Income tax 1%" value={`− ${formatINR(bill.it)}`} />
-              <Row label="Labour cess 1%" value={`− ${formatINR(bill.cess)}`} />
-              <Row label="GST TDS 2%" value={`− ${formatINR(bill.gstTds)}`} />
+              <Row label="GST 18%" value={formatINR2(bill.gst)} />
+              <Row label="Gross" value={formatINR2(bill.gross)} strong />
+              <Row label="Income tax 1%" value={`− ${formatINR2(bill.it)}`} />
+              <Row label="Labour cess 1%" value={`− ${formatINR2(bill.cess)}`} />
+              <Row label="GST TDS 2%" value={`− ${formatINR2(bill.gstTds)}`} />
               <div className="mt-2 flex justify-between border-t border-slate-100 pt-2 text-sm">
                 <span className="font-semibold text-slate-600">Net payable</span>
-                <span className="font-bold text-brand-700">{formatINR(bill.net)}</span>
+                <span className="font-bold text-brand-700">{formatINR2(bill.net)}</span>
               </div>
             </div>
             {hasBills ? (
               <p className="mt-2 text-[10px] text-slate-400">
-                RA-01 baseline: {formatINR(bill.baseline)} · cumulative claimed{" "}
-                {formatINR(bill.baseline + bill.since)}
+                RA-01 baseline: {formatINR2(bill.baseline)} · cumulative claimed{" "}
+                {formatINR2(bill.baseline + bill.since)}
               </p>
             ) : null}
           </Card>

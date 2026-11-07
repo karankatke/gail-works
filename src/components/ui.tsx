@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
@@ -65,6 +65,28 @@ export function Field({
 export const inputClass =
   "w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
 
+type ModalEntry = { id: number; close: () => void };
+const modalStack: ModalEntry[] = [];
+let modalSeq = 0;
+let popAttached = false;
+
+function onPopState() {
+  const top = modalStack[modalStack.length - 1];
+  if (top) top.close();
+}
+
+function attachPop() {
+  if (popAttached) return;
+  window.addEventListener("popstate", onPopState);
+  popAttached = true;
+}
+
+function detachPop() {
+  if (!popAttached || modalStack.length > 0) return;
+  window.removeEventListener("popstate", onPopState);
+  popAttached = false;
+}
+
 export function Modal({
   title,
   children,
@@ -76,20 +98,62 @@ export function Modal({
   onClose: () => void;
   full?: boolean;
 }) {
+  const idRef = useRef(0);
+  if (!idRef.current) idRef.current = ++modalSeq;
+  const closeRef = useRef(onClose);
+  useEffect(() => {
+    closeRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    attachPop();
+    const id = idRef.current;
+    modalStack.push({ id, close: () => closeRef.current() });
+    if (history.state?.modal !== id) {
+      history.pushState({ ...(history.state ?? {}), modal: id }, "");
+    }
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeRef.current();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      const idx = modalStack.findIndex((m) => m.id === id);
+      if (idx >= 0) modalStack.splice(idx, 1);
+
+      if (modalStack.length === 0) {
+        setTimeout(() => {
+          if (modalStack.length === 0 && history.state?.modal === id) {
+            history.back();
+          }
+        }, 50);
+        detachPop();
+      }
+    };
+  }, []);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center">
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+    >
       <div
         className={`max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-white p-5 sm:rounded-3xl ${
           full ? "max-w-2xl" : "max-w-md"
         }`}
       >
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4">
           <h2 className="text-lg font-bold text-slate-900">{title}</h2>
-          <button onClick={onClose} className="rounded-full p-2 text-slate-400 active:bg-slate-100" aria-label="Close">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
-            </svg>
-          </button>
         </div>
         {children}
       </div>
