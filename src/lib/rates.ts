@@ -232,7 +232,7 @@ export const PE_ITEMS: RateItem[] = [
 ];
 
 export const LMC_ITEMS: RateItem[] = [
-  lmc("1.a", "Flat connection", "PE to GI · from main", "Connections", "nos", 7850.53, 5, S.lmcLay, "connection flat house last mile"),
+  lmc("1.a", "New connection - from main line", "New line (existing building ₹1,325.06)", "Connections", "nos", 7850.53, 5, S.lmcLay, "connection flat house last mile"),
   lmc("1.b", "Road crossing", "Asphalt road", "Connections", "m", 616.79, 10, S.lmcLay, "road crossing"),
   lmc("1.c.1", "Excavation up to 1.5 m", "Pit digging", "Connections", "m³", 900, 40, S.lmcLay, "dig pit soil"),
   lmc("1.c.2", "Excavation 1.5–2 m", "Pit digging", "Connections", "m³", 1100, 15, S.lmcLay, "dig pit soil"),
@@ -297,7 +297,7 @@ export const LMC_ITEMS: RateItem[] = [
   lmc("24", "Commercial regulator", "10–65 SCMH", "Meters & regulators", "nos", 1092.89, 2, S.lmcSimple, "regulator commercial"),
 
   lmc("26", "LPG → PNG conversion", "Burner conversion", "Conversion", "nos", 1781, 250, S.lmcInstall, "conversion stove burner"),
-  lmc("27", "New connection (existing building)", "Handed-over building", "Connections", "nos", 1325.06, 100, S.lmcInstall, "connection flat apartment"),
+  lmc("27", "New connection - existing building", "Existing building (new line ₹7,850.53)", "Connections", "nos", 1325.06, 100, S.lmcInstall, "connection flat apartment"),
 
   lmc("29.1", "Registration camp", "Per camp per day", "Registration & other", "nos", 5967.62, 5, S.lmcSimple, "camp canopy"),
   lmc("29.2", "Domestic registration", "PNG customer", "Registration & other", "nos", 209.15, 50, S.lmcSimple, "registration"),
@@ -352,35 +352,34 @@ export const CONTRACTS = {
   },
 } as const;
 
-export const KIT_NEW: { id: string; qty: number }[] = [
-  { id: "LMC-1.a", qty: 1 },
-  { id: "LMC-16", qty: 4 },
-  { id: "LMC-15", qty: 1 },
-  { id: "LMC-13.1.a", qty: 2 },
-  { id: "LMC-17", qty: 1 },
-  { id: "LMC-18.a", qty: 1 },
-  { id: "LMC-19.a", qty: 1 },
-  { id: "LMC-20", qty: 1 },
-  { id: "LMC-26", qty: 1 },
-  { id: "LMC-21", qty: 1 },
-  { id: "LMC-12.b", qty: 1 },
-];
-
-export const KIT_EXISTING: { id: string; qty: number }[] = [
-  { id: "LMC-27", qty: 1 },
-  { id: "LMC-16", qty: 4 },
-  { id: "LMC-15", qty: 1 },
-  { id: "LMC-13.1.a", qty: 2 },
-  { id: "LMC-17", qty: 1 },
-  { id: "LMC-18.a", qty: 1 },
-  { id: "LMC-19.a", qty: 1 },
-  { id: "LMC-20", qty: 1 },
-  { id: "LMC-26", qty: 1 },
-  { id: "LMC-21", qty: 1 },
-];
-
 export function claimPct(stages: Stage[], stageIndex: number): number {
   return stages.slice(0, Math.max(0, stageIndex + 1)).reduce((s, x) => s + x.pct, 0);
+}
+
+/**
+ * LOA stage amounts. The full rate is exact; the stage amounts are rounded to
+ * paise and the largest stage absorbs any 1-paisa difference so they sum to
+ * the full LOA rate.
+ */
+export function stageRates(item: RateItem): number[] {
+  const rates = item.stages.map((s) => Math.round(item.rate * s.pct * 100) / 100);
+  const target = Math.round(item.rate * 100) / 100;
+  const sum = rates.reduce((a, b) => a + b, 0);
+  const diff = Math.round((target - sum) * 100) / 100;
+  if (diff !== 0 && rates.length > 0) {
+    let maxIdx = 0;
+    for (let i = 1; i < rates.length; i += 1) {
+      if (rates[i] > rates[maxIdx]) maxIdx = i;
+    }
+    rates[maxIdx] = Math.round((rates[maxIdx] + diff) * 100) / 100;
+  }
+  return rates;
+}
+
+export function claimPerUnit(item: RateItem, stageIndex: number): number {
+  return stageRates(item)
+    .slice(0, Math.max(0, stageIndex + 1))
+    .reduce((a, b) => a + b, 0);
 }
 
 export function stageLabel(stages: Stage[], stageIndex: number): string {

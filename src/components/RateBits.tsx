@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Button, Modal, inputClass } from "./ui";
-import { claimPct, itemSearchText, type RateItem } from "../lib/rates";
-import { formatINR, formatQty } from "../lib/format";
+import { claimPct, claimPerUnit, itemSearchText, stageRates, type RateItem } from "../lib/rates";
+import { formatQty, formatRate } from "../lib/format";
 
 export function ItemPicker({
   items,
@@ -44,7 +44,7 @@ export function ItemPicker({
               </p>
             </div>
             <div className="shrink-0 text-right">
-              <p className="text-sm font-bold text-slate-900">{formatINR(i.rate)}</p>
+              <p className="text-sm font-bold text-slate-900">{formatRate(i.rate)}</p>
               <p className="text-[10px] text-slate-400">per {i.uom}</p>
             </div>
           </button>
@@ -82,7 +82,7 @@ export function ItemDetail({ item, onClose }: { item: RateItem; onClose: () => v
         <div className="rounded-2xl bg-slate-50 p-4">
           <p className="text-[11px] font-medium text-slate-400">Full rate (excl. GST)</p>
           <p className="text-3xl font-bold text-slate-900">
-            {formatINR(item.rate)}
+            {formatRate(item.rate)}
             <span className="ml-1 text-sm font-normal text-slate-400">/ {item.uom}</span>
           </p>
           <p className="mt-1 text-[11px] text-slate-400">
@@ -95,20 +95,21 @@ export function ItemDetail({ item, onClose }: { item: RateItem; onClose: () => v
             Claim stages
           </p>
           <div className="space-y-1.5">
-            {item.stages.map((s, idx) => (
-              <div key={`${s.label}-${idx}`} className="flex items-center justify-between text-sm">
-                <span className="text-slate-600">
-                  {s.label} <span className="text-slate-400">({Math.round(s.pct * 100)}%)</span>
-                </span>
-                <span className="font-semibold text-slate-900">
-                  {formatINR(item.rate * s.pct)}
-                </span>
-              </div>
-            ))}
+            {stageRates(item).map((stageRate, idx) => {
+              const s = item.stages[idx];
+              return (
+                <div key={`${s.label}-${idx}`} className="flex items-center justify-between text-sm">
+                  <span className="text-slate-600">
+                    {s.label} <span className="text-slate-400">({Math.round(s.pct * 100)}%)</span>
+                  </span>
+                  <span className="font-semibold text-slate-900">{formatRate(stageRate)}</span>
+                </div>
+              );
+            })}
             <div className="mt-2 flex items-center justify-between border-t border-slate-100 pt-2 text-sm">
               <span className="font-medium text-slate-500">Cumulative claim</span>
               <span className="font-bold text-slate-900">
-                {formatINR(item.rate * claimPct(item.stages, item.stages.length - 1))}
+                {formatRate(claimPerUnit(item, item.stages.length - 1))}
               </span>
             </div>
           </div>
@@ -134,7 +135,7 @@ export function RateRow({ item, onClick }: { item: RateItem; onClick: () => void
         <p className="truncate text-[11px] text-slate-500">{item.detail}</p>
       </div>
       <div className="shrink-0 text-right">
-        <p className="text-sm font-bold text-slate-900">{formatINR(item.rate)}</p>
+        <p className="text-sm font-bold text-slate-900">{formatRate(item.rate)}</p>
         <p className="text-[10px] text-slate-400">per {item.uom}</p>
       </div>
     </button>
@@ -162,7 +163,7 @@ export function AddLineModal({
         <div className="rounded-xl bg-slate-50 p-3 text-sm">
           <div className="flex justify-between">
             <span className="text-slate-500">Rate</span>
-            <span className="font-semibold">{formatINR(item.rate)} / {item.uom}</span>
+            <span className="font-semibold">{formatRate(item.rate)} / {item.uom}</span>
           </div>
           <div className="mt-1 flex justify-between">
             <span className="text-slate-500">{item.detail}</span>
@@ -201,13 +202,13 @@ export function AddLineModal({
           <div className="flex justify-between">
             <span className="text-brand-800">Work value (100%)</span>
             <span className="font-semibold text-brand-900">
-              {valid ? formatINR(q * item.rate) : "—"}
+              {valid ? formatRate(q * item.rate) : "—"}
             </span>
           </div>
           <div className="mt-1 flex justify-between">
             <span className="text-brand-800">Claimable now ({Math.round(pct * 100)}%)</span>
             <span className="font-bold text-brand-900">
-              {valid ? formatINR(q * item.rate * pct) : "—"}
+              {valid ? formatRate(q * claimPerUnit(item, stageIndex)) : "—"}
             </span>
           </div>
         </div>

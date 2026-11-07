@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, Spinner } from "../components/ui";
-import { ITEM_MAP, claimPct, CONTRACTS, type Contract } from "../lib/rates";
+import { ITEM_MAP, claimPerUnit, CONTRACTS, type Contract } from "../lib/rates";
 import { formatINR, formatLakh, formatQty } from "../lib/format";
 import { addDays, monthRange, prettyRange, todayISO, weekRange, weekStart } from "../lib/dates";
 import { fetchBills, fetchLabour, fetchWork } from "../lib/work";
@@ -85,7 +85,7 @@ export function ProgressPage() {
       const item = ITEM_MAP[line.item_id];
       if (!item) continue;
       full += Number(line.qty) * item.rate;
-      claim += Number(line.qty) * item.rate * claimPct(item.stages, line.stage_index);
+      claim += Number(line.qty) * claimPerUnit(item, line.stage_index);
     }
     return { full, claim };
   }, [filtered]);
@@ -98,7 +98,7 @@ export function ProgressPage() {
       const item = ITEM_MAP[line.item_id];
       if (!item) continue;
       full += Number(line.qty) * item.rate;
-      claim += Number(line.qty) * item.rate * claimPct(item.stages, line.stage_index);
+      claim += Number(line.qty) * claimPerUnit(item, line.stage_index);
     }
     return { full, claim };
   }, [filtered, period]);
@@ -121,7 +121,7 @@ export function ProgressPage() {
     for (const { line, day } of filtered) {
       const item = ITEM_MAP[line.item_id];
       if (!item) continue;
-      const value = Number(line.qty) * item.rate * claimPct(item.stages, line.stage_index);
+      const value = Number(line.qty) * claimPerUnit(item, line.stage_index);
       const cutoffFor = latestByContract[day.contract];
       if (cutoffFor && day.work_date <= cutoffFor) baseline += value;
       else since += value;
@@ -146,7 +146,7 @@ export function ProgressPage() {
         if (day.work_date < from || day.work_date > to) continue;
         const item = ITEM_MAP[line.item_id];
         if (!item) continue;
-        value += Number(line.qty) * item.rate * claimPct(item.stages, line.stage_index);
+        value += Number(line.qty) * claimPerUnit(item, line.stage_index);
       }
       buckets.push({ start: from, value });
     }
@@ -158,7 +158,7 @@ export function ProgressPage() {
   const itemProgress = useMemo(() => {
     const map = new Map<
       string,
-      { qty: number; full: number; claim: number; stages: number[]; contract: Contract }
+      { qty: number; full: number; claim: number; contract: Contract }
     >();
     for (const { line } of filtered) {
       const item = ITEM_MAP[line.item_id];
@@ -167,14 +167,11 @@ export function ProgressPage() {
         qty: 0,
         full: 0,
         claim: 0,
-        stages: [],
         contract: item.contract,
       };
-      const pct = claimPct(item.stages, line.stage_index);
       cur.qty += Number(line.qty);
       cur.full += Number(line.qty) * item.rate;
-      cur.claim += Number(line.qty) * item.rate * pct;
-      cur.stages.push(pct);
+      cur.claim += Number(line.qty) * claimPerUnit(item, line.stage_index);
       map.set(item.id, cur);
     }
     return [...map.entries()]
@@ -272,7 +269,7 @@ export function ProgressPage() {
               const item = ITEM_MAP[line.item_id];
               if (!item) continue;
               full += Number(line.qty) * item.rate;
-              claim += Number(line.qty) * item.rate * claimPct(item.stages, line.stage_index);
+              claim += Number(line.qty) * claimPerUnit(item, line.stage_index);
             }
             const pct = Math.min(1, full / contract.basicValue);
             return (

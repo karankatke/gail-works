@@ -1,5 +1,5 @@
 import { requireClient } from "./supabase";
-import { claimPct } from "./rates";
+import { claimPct, claimPerUnit } from "./rates";
 import type { RateItem } from "./rates";
 import type {
   BillRow,
@@ -153,7 +153,7 @@ export function lineValues(line: WorkLineRow, item: RateItem | undefined) {
   if (!item) return { full: 0, claim: 0, pct: 0 };
   const full = Number(line.qty) * item.rate;
   const pct = claimPct(item.stages, line.stage_index);
-  return { full, claim: full * pct, pct };
+  return { full, claim: Number(line.qty) * claimPerUnit(item, line.stage_index), pct };
 }
 
 export function dayTotals(day: DayWithLines, map: Record<string, RateItem>) {

@@ -4,6 +4,26 @@ export function formatINR(value: number | string | null | undefined): string {
   return `₹${Math.round(n).toLocaleString("en-IN")}`;
 }
 
+/** Rates keep the document precision: 2 decimals, or 3 when present. No rupee rounding. */
+export function formatRate(value: number | string | null | undefined): string {
+  const n = Number(value ?? 0);
+  if (!Number.isFinite(n)) return "₹0.00";
+  return `₹${n.toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 3,
+  })}`;
+}
+
+/** Same as formatRate, without the rupee sign (for the rate matrix). */
+export function formatRatePlain(value: number | string | null | undefined): string {
+  const n = Number(value ?? 0);
+  if (!Number.isFinite(n)) return "0.00";
+  return n.toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 3,
+  });
+}
+
 export function formatINR2(value: number | string | null | undefined): string {
   const n = Number(value ?? 0);
   if (!Number.isFinite(n)) return "₹0.00";

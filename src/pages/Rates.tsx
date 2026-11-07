@@ -4,23 +4,15 @@ import { ItemDetail, RateRow } from "../components/RateBits";
 import {
   ALL_ITEMS,
   CATEGORIES,
-  ITEM_MAP,
-  KIT_EXISTING,
-  KIT_NEW,
   LMC_ITEMS,
   PE_ITEMS,
   itemSearchText,
   type Contract,
   type RateItem,
 } from "../lib/rates";
+import { formatRatePlain } from "../lib/format";
 
 const MATRIX_SIZES = [20, 32, 63, 90, 125];
-
-function compact(n: number): string {
-  if (n >= 10000) return `${(n / 1000).toFixed(1)}k`;
-  if (n >= 1000) return `${(n / 1000).toFixed(2).replace(/0$/, "")}k`;
-  return String(Math.round(n));
-}
 
 export function RatesPage() {
   const [contract, setContract] = useState<Contract>(() => {
@@ -29,7 +21,6 @@ export function RatesPage() {
   });
   const [query, setQuery] = useState("");
   const [detail, setDetail] = useState<RateItem | null>(null);
-  const [kitMode, setKitMode] = useState<"new" | "existing">("existing");
 
   const switchContract = (c: Contract) => {
     setContract(c);
@@ -68,11 +59,6 @@ export function RatesPage() {
       };
     });
   }, []);
-
-  const kit = kitMode === "new" ? KIT_NEW : KIT_EXISTING;
-  const kitRows = kit
-    .map((k) => ITEM_MAP[k.id])
-    .filter((x): x is RateItem => Boolean(x));
 
   return (
     <div className="space-y-3">
@@ -128,7 +114,7 @@ export function RatesPage() {
             </p>
           </div>
           <div className="mt-2 overflow-x-auto px-1 pb-2">
-            <table className="w-full min-w-[420px] border-collapse text-[11px]">
+            <table className="w-full border-collapse text-[10px]">
               <thead>
                 <tr className="text-slate-400">
                   <th className="px-1.5 py-1 text-left font-medium">Size</th>
@@ -152,7 +138,7 @@ export function RatesPage() {
                             onClick={() => setDetail(cell)}
                             className="w-full rounded-md px-1 py-1.5 font-semibold text-slate-800 active:bg-brand-50"
                           >
-                            {compact(cell.rate)}
+                            {formatRatePlain(cell.rate)}
                           </button>
                         ) : (
                           <span className="text-slate-300">—</span>
@@ -165,42 +151,7 @@ export function RatesPage() {
             </table>
           </div>
           <p className="border-t border-slate-100 px-3 py-2 text-[10px] text-slate-400">
-            Values in ₹ per metre. Soil = open trench. HDD = horizontal drilling.
-          </p>
-        </Card>
-      ) : null}
-
-      {!results && contract === "LMC" ? (
-        <Card className="overflow-hidden">
-          <div className="px-3 pt-3">
-            <p className="text-sm font-bold text-slate-900">Common connection items</p>
-            <p className="text-[11px] text-slate-500">One-unit rates · tap for stages</p>
-            <div className="mt-2 grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1">
-              <button
-                onClick={() => setKitMode("existing")}
-                className={`rounded-md py-1.5 text-[11px] font-semibold ${
-                  kitMode === "existing" ? "bg-white text-brand-700 shadow-sm" : "text-slate-500"
-                }`}
-              >
-                Existing building
-              </button>
-              <button
-                onClick={() => setKitMode("new")}
-                className={`rounded-md py-1.5 text-[11px] font-semibold ${
-                  kitMode === "new" ? "bg-white text-brand-700 shadow-sm" : "text-slate-500"
-                }`}
-              >
-                New PE connection
-              </button>
-            </div>
-          </div>
-          <div className="mt-2 border-t border-slate-100">
-            {kitRows.map((item) => (
-              <RateRow key={item.id} item={item} onClick={() => setDetail(item)} />
-            ))}
-          </div>
-          <p className="border-t border-slate-100 px-3 py-2 text-[10px] text-slate-400">
-            Each rate is for one unit. Multiply by the quantity you measured.
+            Values in ₹ per metre. Soil = open trench. HDD = horizontal drilling (normal soil). HDD rock = rock.
           </p>
         </Card>
       ) : null}

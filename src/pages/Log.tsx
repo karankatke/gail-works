@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Card, Empty, Modal, Spinner, inputClass } from "../components/ui";
 import { AddLineModal, ItemPicker } from "../components/RateBits";
-import { LMC_ITEMS, PE_ITEMS, ITEM_MAP, claimPct, type Contract, type RateItem } from "../lib/rates";
+import { LMC_ITEMS, PE_ITEMS, ITEM_MAP, claimPct, claimPerUnit, type Contract, type RateItem } from "../lib/rates";
 import { formatINR, formatQty } from "../lib/format";
 import { prettyDate, todayISO } from "../lib/dates";
 import { deleteWorkDay, fetchLocations, fetchWork, saveWorkDay } from "../lib/work";
@@ -48,7 +48,7 @@ export function LogPage() {
     let claim = 0;
     for (const l of draft) {
       full += l.qty * l.item.rate;
-      claim += l.qty * l.item.rate * claimPct(l.item.stages, l.stageIndex);
+      claim += l.qty * claimPerUnit(l.item, l.stageIndex);
     }
     return { full, claim };
   }, [draft]);
@@ -185,7 +185,7 @@ export function LogPage() {
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="text-sm font-bold text-slate-900">
-                    {formatINR(l.qty * l.item.rate * pct)}
+                    {formatINR(l.qty * claimPerUnit(l.item, l.stageIndex))}
                   </p>
                   <button
                     onClick={() => setDraft((prev) => prev.filter((_, i) => i !== idx))}
@@ -231,7 +231,7 @@ export function LogPage() {
               let claim = 0;
               for (const line of d.lines) {
                 const item = ITEM_MAP[line.item_id];
-                if (item) claim += Number(line.qty) * item.rate * claimPct(item.stages, line.stage_index);
+                if (item) claim += Number(line.qty) * claimPerUnit(item, line.stage_index);
               }
               const baseline = (d.note ?? "").toLowerCase().includes("ra-01");
               return (
@@ -295,7 +295,6 @@ export function LogPage() {
               {viewDay.lines.map((line) => {
                 const item = ITEM_MAP[line.item_id];
                 if (!item) return null;
-                const pct = claimPct(item.stages, line.stage_index);
                 return (
                   <div key={line.id} className="flex items-center justify-between gap-2 p-3 text-sm">
                     <div className="min-w-0">
@@ -305,7 +304,7 @@ export function LogPage() {
                       </p>
                     </div>
                     <p className="shrink-0 font-semibold text-slate-900">
-                      {formatINR(Number(line.qty) * item.rate * pct)}
+                      {formatINR(Number(line.qty) * claimPerUnit(item, line.stage_index))}
                     </p>
                   </div>
                 );
