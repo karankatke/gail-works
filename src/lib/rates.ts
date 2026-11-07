@@ -233,6 +233,7 @@ export const PE_ITEMS: RateItem[] = [
 
 export const LMC_ITEMS: RateItem[] = [
   lmc("1.a", "New connection - from main line", "New line (existing building ₹1,325.06)", "Connections", "nos", 7850.53, 5, S.lmcLay, "connection flat house last mile"),
+  lmc("27", "New connection - existing building", "Existing building (new line ₹7,850.53)", "Connections", "nos", 1325.06, 100, S.lmcInstall, "connection flat apartment"),
   lmc("1.b", "Road crossing", "Asphalt road", "Connections", "m", 616.79, 10, S.lmcLay, "road crossing"),
   lmc("1.c.1", "Excavation up to 1.5 m", "Pit digging", "Connections", "m³", 900, 40, S.lmcLay, "dig pit soil"),
   lmc("1.c.2", "Excavation 1.5–2 m", "Pit digging", "Connections", "m³", 1100, 15, S.lmcLay, "dig pit soil"),
@@ -297,7 +298,6 @@ export const LMC_ITEMS: RateItem[] = [
   lmc("24", "Commercial regulator", "10–65 SCMH", "Meters & regulators", "nos", 1092.89, 2, S.lmcSimple, "regulator commercial"),
 
   lmc("26", "LPG → PNG conversion", "Burner conversion", "Conversion", "nos", 1781, 250, S.lmcInstall, "conversion stove burner"),
-  lmc("27", "New connection - existing building", "Existing building (new line ₹7,850.53)", "Connections", "nos", 1325.06, 100, S.lmcInstall, "connection flat apartment"),
 
   lmc("29.1", "Registration camp", "Per camp per day", "Registration & other", "nos", 5967.62, 5, S.lmcSimple, "camp canopy"),
   lmc("29.2", "Domestic registration", "PNG customer", "Registration & other", "nos", 209.15, 50, S.lmcSimple, "registration"),
