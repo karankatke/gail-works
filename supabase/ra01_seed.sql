@@ -4,11 +4,11 @@
 -- Safe to re-run: it only inserts when the matching baseline is missing.
 
 insert into public.sor_bills (contract, bill_no, period_end, invoice_date)
-values ('PE', 'RA-01', date '2026-10-16', date '2026-10-16')
+values ('PE', 'RA-01', date '2026-11-15', date '2026-10-16')
 on conflict (contract, bill_no) do nothing;
 
 insert into public.sor_bills (contract, bill_no, period_end, invoice_date)
-values ('LMC', 'RA-01', date '2026-10-16', date '2026-10-16')
+values ('LMC', 'RA-01', date '2026-11-15', date '2026-10-16')
 on conflict (contract, bill_no) do nothing;
 
 with d as (

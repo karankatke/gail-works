@@ -98,6 +98,13 @@ export function MorePage() {
             ))
           )}
         </div>
+        <div className="mt-3 rounded-xl bg-brand-50 p-2.5 text-[11px] text-brand-900">
+          <p className="font-semibold">Bill plan</p>
+          <p>
+            RA-01 up to 15 Nov 2026 · RA-02 16–30 Nov 2026 · RA-03 December 2026, then one bill
+            per month.
+          </p>
+        </div>
         <BillForm onSaved={load} />
       </Card>
 

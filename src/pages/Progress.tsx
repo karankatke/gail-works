@@ -2,7 +2,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, Spinner } from "../components/ui";
 import { ITEM_MAP, claimPerUnit, CONTRACTS, type Contract } from "../lib/rates";
 import { formatINR, formatLakh, formatQty } from "../lib/format";
-import { addDays, monthRange, prettyRange, todayISO, weekRange, weekStart } from "../lib/dates";
+import {
+  monthChunks,
+  monthRange,
+  parseISO,
+  prettyDateLong,
+  prettyRange,
+  toISODate,
+  todayISO,
+} from "../lib/dates";
 import { fetchBills, fetchLabour, fetchWork } from "../lib/work";
 import type { BillRow, DayWithLines, LabourCost } from "../lib/types";
 
@@ -10,6 +18,23 @@ type RangeKey = "week" | "month" | "all";
 type Filter = "ALL" | Contract;
 
 const DEFAULT_START = "2026-09-01";
+
+function nextBillInfo(bill: BillRow | null): { no: string; period: string } | null {
+  if (!bill) return null;
+  const m = bill.bill_no.match(/^(.*?)(\d+)$/);
+  const no = m ? `${m[1]}${String(Number(m[2]) + 1).padStart(m[2].length, "0")}` : bill.bill_no;
+  const d = parseISO(bill.period_end);
+  let start: Date;
+  let end: Date;
+  if (d.getDate() === 15) {
+    start = new Date(d.getFullYear(), d.getMonth(), 16);
+    end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  } else {
+    start = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    end = new Date(d.getFullYear(), d.getMonth() + 2, 0);
+  }
+  return { no, period: prettyRange(toISODate(start), toISODate(end)) };
+}
 
 export function ProgressPage() {
   const [days, setDays] = useState<DayWithLines[]>([]);
@@ -25,7 +50,12 @@ export function ProgressPage() {
   const today = todayISO();
 
   const period = useMemo(() => {
-    if (range === "week") return weekRange(today);
+    if (range === "week") {
+      const chunks = monthChunks(today);
+      const current =
+        chunks.find((c) => c.from <= today && c.to >= today) ?? chunks[chunks.length - 1];
+      return { from: current.from, to: current.to };
+    }
     if (range === "month") return monthRange(today);
     const start = days.length
       ? days.reduce((min, d) => (d.work_date < min ? d.work_date : min), days[0].work_date)
@@ -105,6 +135,7 @@ export function ProgressPage() {
 
   const latestBill = bills[0] ?? null;
   const hasBills = bills.length > 0;
+  const nextBill = useMemo(() => nextBillInfo(latestBill), [latestBill]);
 
   const latestByContract = useMemo(() => {
     const map: Record<Contract, string | null> = { PE: null, LMC: null };
@@ -136,21 +167,23 @@ export function ProgressPage() {
   }, [filtered, latestByContract]);
 
   const weeks = useMemo(() => {
-    const start = addDays(weekStart(today), -7 * 7);
-    const buckets: { start: string; value: number }[] = [];
-    for (let i = 0; i < 8; i += 1) {
-      const from = addDays(start, i * 7);
-      const to = addDays(from, 6);
+    const now = parseISO(today);
+    const months = [2, 1, 0].map(
+      (offset) => new Date(now.getFullYear(), now.getMonth() - offset, 1),
+    );
+    const chunks = months
+      .flatMap((m) => monthChunks(toISODate(m)))
+      .filter((c) => c.from <= today);
+    return chunks.slice(-8).map((c) => {
       let value = 0;
       for (const { line, day } of filtered) {
-        if (day.work_date < from || day.work_date > to) continue;
+        if (day.work_date < c.from || day.work_date > c.to) continue;
         const item = ITEM_MAP[line.item_id];
         if (!item) continue;
         value += Number(line.qty) * claimPerUnit(item, line.stage_index);
       }
-      buckets.push({ start: from, value });
-    }
-    return buckets;
+      return { ...c, value };
+    });
   }, [filtered, today]);
 
   const maxWeek = Math.max(1, ...weeks.map((w) => w.value));
@@ -158,9 +191,16 @@ export function ProgressPage() {
   const itemProgress = useMemo(() => {
     const map = new Map<
       string,
-      { qty: number; full: number; claim: number; contract: Contract }
+      {
+        qty: number;
+        full: number;
+        claim: number;
+        contract: Contract;
+        sites: Set<string>;
+        hasAll: boolean;
+      }
     >();
-    for (const { line } of filtered) {
+    for (const { line, day } of filtered) {
       const item = ITEM_MAP[line.item_id];
       if (!item) continue;
       const cur = map.get(item.id) ?? {
@@ -168,7 +208,11 @@ export function ProgressPage() {
         full: 0,
         claim: 0,
         contract: item.contract,
+        sites: new Set<string>(),
+        hasAll: false,
       };
+      if (day.location_id) cur.sites.add(day.location_id);
+      else cur.hasAll = true;
       cur.qty += Number(line.qty);
       cur.full += Number(line.qty) * item.rate;
       cur.claim += Number(line.qty) * claimPerUnit(item, line.stage_index);
@@ -299,10 +343,12 @@ export function ProgressPage() {
           <Card className="p-3">
             <div className="flex items-center justify-between">
               <p className="text-sm font-bold text-slate-900">
-                {latestBill ? `Next bill after ${latestBill.bill_no}` : "Next RA bill"}
+                {nextBill ? `${nextBill.no} · ${nextBill.period}` : "Next RA bill"}
               </p>
               <p className="text-[10px] text-slate-400">
-                since last bill
+                {latestBill
+                  ? `after ${latestBill.bill_no} · closed ${prettyDateLong(latestBill.period_end)}`
+                  : "since start"}
               </p>
             </div>
             <p className="mt-2 text-2xl font-bold text-slate-900">{formatINR(bill.since)}</p>
@@ -327,62 +373,78 @@ export function ProgressPage() {
           </Card>
 
           <Card className="p-3">
-            <p className="text-sm font-bold text-slate-900">Weekly claimable</p>
-            <p className="text-[11px] text-slate-500">Last 8 weeks · {filter === "ALL" ? "both contracts" : filter}</p>
-            <div className="mt-3 flex h-28 items-end gap-1.5">
+            <p className="text-sm font-bold text-slate-900">Claimable by period</p>
+            <p className="text-[11px] text-slate-500">
+              Last 8 periods · {filter === "ALL" ? "both contracts" : filter}
+            </p>
+            <div className="mt-3 flex items-end gap-1">
               {weeks.map((w, idx) => (
-                <div key={w.start} className="flex flex-1 flex-col items-center gap-1">
+                <div key={w.from} className="flex flex-1 flex-col items-center gap-0.5">
+                  <span className="text-[8px] font-semibold text-slate-600">
+                    {formatLakh(w.value)}
+                  </span>
                   <div
                     className={`w-full rounded-t ${
                       idx === weeks.length - 1 ? "bg-brand-600" : "bg-brand-200"
                     }`}
-                    style={{ height: `${Math.max(2, (w.value / maxWeek) * 90)}px` }}
+                    style={{ height: `${Math.max(2, (w.value / maxWeek) * 70)}px` }}
                     title={formatINR(w.value)}
                   />
-                  <span className="text-[9px] text-slate-400">{w.start.slice(8)}</span>
+                  <span className="text-center text-[8px] leading-tight text-slate-400">
+                    {w.label}
+                  </span>
                 </div>
               ))}
             </div>
-            <p className="mt-1 text-right text-[10px] text-slate-400">
-              Highest week {formatLakh(maxWeek)}
+            <p className="mt-1 text-[10px] text-slate-400">
+              Each bar is 1–7, 8–14, 15–21, 22–28, 29–end of the month.
+            </p>
+            <p className="text-right text-[10px] text-slate-400">
+              Highest period {formatLakh(maxWeek)}
             </p>
           </Card>
 
           <Card className="overflow-hidden">
-            <div className="flex items-center justify-between px-3 py-2">
-              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                Item progress
+            <div className="px-3 py-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                  Item progress
+                </p>
+                <p className="text-[10px] text-slate-400">{itemProgress.length} items</p>
+              </div>
+              <p className="text-[10px] text-slate-400">
+                All work to date · sites, quantity, claimable
               </p>
-              <p className="text-[10px] text-slate-400">{itemProgress.length} items</p>
             </div>
             {shown.map((row) => {
               const item = row.item;
-              const pct = item && item.loaQty > 0 ? row.qty / item.loaQty : 0;
-              const over = pct > 1;
+              const siteCount = row.sites.size;
+              const siteLabel = row.hasAll
+                ? siteCount > 0
+                  ? `${siteCount} site${siteCount === 1 ? "" : "s"} + all sites`
+                  : "All sites"
+                : `${siteCount} site${siteCount === 1 ? "" : "s"}`;
               return (
-                <div key={row.item?.id} className="border-t border-slate-50 px-3 py-2">
+                <div key={item?.id} className="border-t border-slate-50 px-3 py-2">
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate text-xs font-semibold text-slate-800">
                         {item?.name}
+                        <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500">
+                          {item?.contract}
+                        </span>
                         <span className="ml-1 text-[10px] font-normal text-slate-400">
                           {item?.detail}
                         </span>
                       </p>
-                      <p className={`text-[10px] ${over ? "text-amber-600" : "text-slate-500"}`}>
-                        {formatQty(row.qty)} / {formatQty(item?.loaQty ?? 0)} {item?.uom} ·{" "}
-                        {Math.round(pct * 100)}% of LOA{over ? " · over LOA" : ""}
+                      <p className="text-[10px] text-slate-500">
+                        {siteLabel} · {formatQty(row.qty)} {item?.uom}
                       </p>
                     </div>
-                    <p className="shrink-0 text-xs font-bold text-slate-900">
-                      {formatLakh(row.claim)}
-                    </p>
-                  </div>
-                  <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
-                    <div
-                      className={`h-full rounded-full ${over ? "bg-amber-500" : "bg-brand-500"}`}
-                      style={{ width: `${Math.min(100, pct * 100)}%` }}
-                    />
+                    <div className="shrink-0 text-right">
+                      <p className="text-xs font-bold text-slate-900">{formatLakh(row.claim)}</p>
+                      <p className="text-[9px] text-slate-400">claimable</p>
+                    </div>
                   </div>
                 </div>
               );

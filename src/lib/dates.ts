@@ -85,3 +85,27 @@ export function isoWeekNumber(iso: string): number {
 export function isSameMonth(iso: string, other: string): boolean {
   return iso.slice(0, 7) === other.slice(0, 7);
 }
+
+export interface DateChunk {
+  from: string;
+  to: string;
+  label: string;
+}
+
+/** 1–7, 8–14, 15–21, 22–28, 29–end of the month. */
+export function monthChunks(iso: string): DateChunk[] {
+  const d = parseISO(iso);
+  const year = d.getFullYear();
+  const month = d.getMonth();
+  const last = new Date(year, month + 1, 0).getDate();
+  const out: DateChunk[] = [];
+  for (let start = 1; start <= last; start += 7) {
+    const end = Math.min(start + 6, last);
+    out.push({
+      from: toISODate(new Date(year, month, start)),
+      to: toISODate(new Date(year, month, end)),
+      label: `${start}–${end} ${MONTHS[month]}`,
+    });
+  }
+  return out;
+}
