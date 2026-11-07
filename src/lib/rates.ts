@@ -1,3 +1,5 @@
+import { DESCRIPTIONS } from "./descriptions";
+
 export type Contract = "PE" | "LMC";
 
 export type Stage = { label: string; pct: number };
@@ -303,6 +305,10 @@ export const LMC_ITEMS: RateItem[] = [
 ];
 
 export const ALL_ITEMS: RateItem[] = [...PE_ITEMS, ...LMC_ITEMS];
+
+for (const item of ALL_ITEMS) {
+  item.official = DESCRIPTIONS[item.id] ?? item.official ?? "";
+}
 
 export const ITEM_MAP: Record<string, RateItem> = Object.fromEntries(
   ALL_ITEMS.map((i) => [i.id, i]),

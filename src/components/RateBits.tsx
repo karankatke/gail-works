@@ -68,6 +68,17 @@ export function ItemDetail({ item, onClose }: { item: RateItem; onClose: () => v
           <p className="mt-1 text-sm text-slate-500">{item.detail}</p>
         </div>
 
+        {item.official ? (
+          <div className="rounded-2xl border border-slate-100 p-3">
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+              Description
+            </p>
+            <p className="whitespace-pre-line text-sm leading-relaxed text-slate-600">
+              {item.official}
+            </p>
+          </div>
+        ) : null}
+
         <div className="rounded-2xl bg-slate-50 p-4">
           <p className="text-[11px] font-medium text-slate-400">Full rate (excl. GST)</p>
           <p className="text-3xl font-bold text-slate-900">
