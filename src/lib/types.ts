@@ -61,6 +61,33 @@ export interface ActivityRow {
   completed_at: string | null;
 }
 
+export interface EstimateRow {
+  id: string;
+  name: string;
+  contract: Contract;
+  location_id: string | null;
+  material_cost: number;
+  crew_days: number;
+  daily_labour_cost: number;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EstimateLineRow {
+  id: string;
+  estimate_id: string;
+  item_id: string;
+  qty: number;
+  uom: string;
+  rate: number;
+  input_text: string | null;
+}
+
+export interface EstimateWithLines extends EstimateRow {
+  lines: EstimateLineRow[];
+}
+
 export interface LabourCost {
   wages: number;
   bata: number;

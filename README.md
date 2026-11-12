@@ -9,6 +9,7 @@ It shares the same Supabase project and owner login as the attendance app, but l
 - **Rates** — final LOA rates for both contracts, PE (pipeline) and LMC (last mile). Search in trade language ("32", "1 inch", "meter"), a pipe rate matrix, and the full SOR description on every item. All rates show the document precision (2–3 decimals), never rounded to rupees.
 - **Log work** — a site board with a **plan** and **quick repeat**. Create activities with a target quantity from the work order, then tap **+ Today** each day to add progress. Quantities can be entered in **feet/inches** (including length × width × depth for excavation) and are converted to the SOR unit automatically.
 - **Progress** — cumulative work vs the LOA value, the next RA bill (value, GST, deductions, net), claimable by clear 7-day periods, item-wise quantities/sites/value, and labour cost from the attendance app.
+- **Estimate** — from Rates, tap **Estimate a project**. Add items in feet/inches, enter material cost and crew days, and see claimable at completion, labour cost, estimated profit and margin. Save estimates with a name/site and reopen them.
 - **More** — project value, RA bill plan and cutoffs, how the numbers work, account.
 
 Phone **back** closes any popup and leaves you in the app; the old X buttons are gone.
@@ -19,6 +20,7 @@ Phone **back** closes any popup and leaves you in the app; the old X buttons are
 2. Each item is paid in **stages** (for example 60% laying → 10% testing → 25% commissioning → 5% documents, or 70/25/5). The app stores the highest stage reached and derives the claim percentage.
 3. **Labour is one project.** Wages and bata come from the attendance app for all sites; they are not split between PE and LMC.
 4. **The RA bill is cumulative.** Work after the latest bill cutoff becomes the next bill. Logging weekly is enough.
+5. **Estimates are separate.** A saved estimate uses the full LOA rate plus your material and crew-day assumptions. It never changes the bill or the work log.
 
 ## Stack
 
@@ -41,11 +43,14 @@ VITE_SUPABASE_ANON_KEY=...
 
 ### Database
 
-Run `supabase/sor_schema.sql` once in the Supabase SQL editor (or apply it as a migration). It creates four owner-only tables:
+Run `supabase/sor_schema.sql` once in the Supabase SQL editor (or apply it as a migration). It creates six owner-only tables:
 
 - `sor_work_days` — one day per contract
 - `sor_activities` — the site plan: one SOR item with an optional target quantity
 - `sor_work_lines` — item, quantity (in the SOR unit), original feet/inches input, highest stage reached, linked activity
+- `sor_estimates` — a saved project estimate with material and crew-day assumptions
+- `sor_estimate_lines` — the SOR items in an estimate
+- `sor_bills` — RA bill cutoffs
 - `sor_bills` — RA bill cutoffs
 
 RLS uses the existing `public.is_owner()` function from the attendance app.

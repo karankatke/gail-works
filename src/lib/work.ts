@@ -5,6 +5,9 @@ import type {
   ActivityRow,
   BillRow,
   DayWithLines,
+  EstimateLineRow,
+  EstimateRow,
+  EstimateWithLines,
   LabourCost,
   LocationRow,
   WorkDayRow,
@@ -228,4 +231,57 @@ export function dayTotals(day: DayWithLines, map: Record<string, RateItem>) {
     claim += v.claim;
   }
   return { full, claim };
+}
+
+export async function fetchEstimates(): Promise<EstimateWithLines[]> {
+  const client = requireClient();
+  const [est, lines] = await Promise.all([
+    client.from("sor_estimates").select("*").order("created_at", { ascending: false }),
+    client.from("sor_estimate_lines").select("*"),
+  ]);
+  if (est.error) throw est.error;
+  if (lines.error) throw lines.error;
+  const byId = new Map<string, EstimateLineRow[]>();
+  for (const line of (lines.data ?? []) as EstimateLineRow[]) {
+    const list = byId.get(line.estimate_id) ?? [];
+    list.push(line);
+    byId.set(line.estimate_id, list);
+  }
+  return ((est.data ?? []) as EstimateRow[]).map((e) => ({
+    ...e,
+    lines: byId.get(e.id) ?? [],
+  }));
+}
+
+export async function saveEstimate(input: {
+  id: string | null;
+  name: string;
+  contract: EstimateRow["contract"];
+  location_id: string | null;
+  material_cost: number;
+  crew_days: number;
+  daily_labour_cost: number;
+  note: string | null;
+  lines: { item_id: string; qty: number; uom: string; rate: number; input_text: string | null }[];
+}): Promise<string> {
+  const client = requireClient();
+  const { data, error } = await client.rpc("save_estimate", {
+    p_id: input.id,
+    p_name: input.name,
+    p_contract: input.contract,
+    p_location_id: input.location_id,
+    p_material_cost: input.material_cost,
+    p_crew_days: input.crew_days,
+    p_daily_labour_cost: input.daily_labour_cost,
+    p_note: input.note,
+    p_lines: input.lines,
+  });
+  if (error) throw error;
+  return data as string;
+}
+
+export async function deleteEstimate(id: string): Promise<void> {
+  const client = requireClient();
+  const { error } = await client.from("sor_estimates").delete().eq("id", id);
+  if (error) throw error;
 }

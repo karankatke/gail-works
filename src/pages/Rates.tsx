@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
-import { Card, inputClass } from "../components/ui";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Button, Card, inputClass } from "../components/ui";
 import { ItemDetail, RateRow } from "../components/RateBits";
+import { EstimatorSheet } from "../components/EstimatorSheet";
 import {
   ALL_ITEMS,
   CATEGORIES,
@@ -11,6 +12,8 @@ import {
   type RateItem,
 } from "../lib/rates";
 import { formatRatePlain } from "../lib/format";
+import { fetchEstimates } from "../lib/work";
+import type { EstimateWithLines } from "../lib/types";
 
 const MATRIX_SIZES = [20, 32, 63, 90, 125];
 
@@ -21,6 +24,24 @@ export function RatesPage() {
   });
   const [query, setQuery] = useState("");
   const [detail, setDetail] = useState<RateItem | null>(null);
+  const [estimates, setEstimates] = useState<EstimateWithLines[]>([]);
+  const [estimator, setEstimator] = useState<{
+    contract: Contract;
+    estimate?: EstimateWithLines | null;
+    tab?: "new" | "saved";
+  } | null>(null);
+
+  const loadEstimates = useCallback(async () => {
+    try {
+      setEstimates(await fetchEstimates());
+    } catch {
+      // keep the rate card usable
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadEstimates();
+  }, [loadEstimates]);
 
   const switchContract = (c: Contract) => {
     setContract(c);
@@ -82,6 +103,34 @@ export function RatesPage() {
           placeholder="Search rate: 32, 1 inch, meter, valve…"
           className={`${inputClass} mt-3 py-2.5 text-sm`}
         />
+      </Card>
+
+      <Card className="p-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-slate-900">Estimate a project</p>
+            <p className="text-[11px] text-slate-500">
+              Add items, material and crew days to see profit.
+            </p>
+          </div>
+          <Button
+            onClick={() => setEstimator({ contract })}
+            className="shrink-0 px-3 py-2 text-xs"
+          >
+            Start
+          </Button>
+        </div>
+        {estimates.length > 0 ? (
+          <button
+            onClick={() => setEstimator({ contract, tab: "saved" })}
+            className="mt-2 flex w-full items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-left"
+          >
+            <span className="text-[11px] font-semibold text-slate-600">
+              Saved estimates ({estimates.length})
+            </span>
+            <span className="text-[10px] text-slate-400">view ›</span>
+          </button>
+        ) : null}
       </Card>
 
       {results ? (
@@ -179,6 +228,16 @@ export function RatesPage() {
       </p>
 
       {detail ? <ItemDetail item={detail} onClose={() => setDetail(null)} /> : null}
+
+      {estimator ? (
+        <EstimatorSheet
+          initialContract={estimator.contract}
+          initialEstimate={estimator.estimate ?? null}
+          initialTab={estimator.tab}
+          onClose={() => setEstimator(null)}
+          onSaved={loadEstimates}
+        />
+      ) : null}
     </div>
   );
 }

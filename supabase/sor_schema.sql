@@ -103,3 +103,102 @@ create policy "sor_bills_owner_all"
   to authenticated
   using (public.is_owner())
   with check (public.is_owner());
+
+-- ------------------------------------------------------------
+-- Estimator: one estimate with a basket of SOR items, material
+-- cost and crew days. Totals are computed in the app.
+-- ------------------------------------------------------------
+create table if not exists public.sor_estimates (
+  id                 uuid primary key default gen_random_uuid(),
+  name               text not null,
+  contract           text not null check (contract in ('PE', 'LMC')),
+  location_id        uuid references public.locations(id) on delete set null,
+  material_cost      numeric(14,2) not null default 0,
+  crew_days          numeric(10,2) not null default 0,
+  daily_labour_cost  numeric(14,2) not null default 0,
+  note               text,
+  created_at         timestamptz not null default now(),
+  updated_at         timestamptz not null default now()
+);
+
+create table if not exists public.sor_estimate_lines (
+  id           uuid primary key default gen_random_uuid(),
+  estimate_id  uuid not null references public.sor_estimates(id) on delete cascade,
+  item_id      text not null,
+  qty          numeric(14,3) not null check (qty > 0),
+  uom          text not null,
+  rate         numeric(14,2) not null,
+  input_text   text,
+  created_at   timestamptz not null default now()
+);
+
+create index if not exists sor_estimates_created_idx on public.sor_estimates (created_at desc);
+create index if not exists sor_estimate_lines_estimate_idx on public.sor_estimate_lines (estimate_id);
+
+alter table public.sor_estimates enable row level security;
+alter table public.sor_estimate_lines enable row level security;
+
+drop policy if exists "sor_estimates_owner_all" on public.sor_estimates;
+create policy "sor_estimates_owner_all"
+  on public.sor_estimates for all
+  to authenticated
+  using (public.is_owner())
+  with check (public.is_owner());
+
+drop policy if exists "sor_estimate_lines_owner_all" on public.sor_estimate_lines;
+create policy "sor_estimate_lines_owner_all"
+  on public.sor_estimate_lines for all
+  to authenticated
+  using (public.is_owner())
+  with check (public.is_owner());
+
+-- Save/update the estimate and replace its lines in one transaction.
+create or replace function public.save_estimate(
+  p_id uuid,
+  p_name text,
+  p_contract text,
+  p_location_id uuid,
+  p_material_cost numeric,
+  p_crew_days numeric,
+  p_daily_labour_cost numeric,
+  p_note text,
+  p_lines jsonb
+) returns uuid
+language plpgsql
+set search_path = public
+as $$
+declare
+  v_id uuid;
+begin
+  if p_id is null then
+    insert into public.sor_estimates
+      (name, contract, location_id, material_cost, crew_days, daily_labour_cost, note)
+    values
+      (p_name, p_contract, p_location_id, p_material_cost, p_crew_days, p_daily_labour_cost, p_note)
+    returning id into v_id;
+  else
+    update public.sor_estimates
+    set name = p_name,
+        contract = p_contract,
+        location_id = p_location_id,
+        material_cost = p_material_cost,
+        crew_days = p_crew_days,
+        daily_labour_cost = p_daily_labour_cost,
+        note = p_note,
+        updated_at = now()
+    where id = p_id
+    returning id into v_id;
+    delete from public.sor_estimate_lines where estimate_id = v_id;
+  end if;
+
+  insert into public.sor_estimate_lines (estimate_id, item_id, qty, uom, rate, input_text)
+  select v_id, x.item_id, x.qty, x.uom, x.rate, x.input_text
+  from jsonb_to_recordset(p_lines)
+    as x(item_id text, qty numeric, uom text, rate numeric, input_text text);
+
+  return v_id;
+end;
+$$;
+
+revoke all on function public.save_estimate(uuid, text, text, uuid, numeric, numeric, numeric, text, jsonb) from public;
+grant execute on function public.save_estimate(uuid, text, text, uuid, numeric, numeric, numeric, text, jsonb) to authenticated;
