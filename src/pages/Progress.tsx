@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, Spinner } from "../components/ui";
-import { ITEM_MAP, claimPerUnit, CONTRACTS, type Contract } from "../lib/rates";
+import { ITEM_MAP, claimPerUnit, CONTRACTS, type Contract, type RateItem } from "../lib/rates";
 import { formatINR, formatINR2, formatLakh, formatQty } from "../lib/format";
 import {
   monthChunks,
@@ -11,8 +11,8 @@ import {
   toISODate,
   todayISO,
 } from "../lib/dates";
-import { fetchBills, fetchLabour, fetchWork } from "../lib/work";
-import type { BillRow, DayWithLines, LabourCost } from "../lib/types";
+import { fetchBills, fetchLabour, fetchLocations, fetchWork } from "../lib/work";
+import type { BillRow, DayWithLines, LabourCost, LocationRow } from "../lib/types";
 
 type RangeKey = "week" | "month" | "all";
 type Filter = "ALL" | Contract;
@@ -39,13 +39,16 @@ function nextBillInfo(bill: BillRow | null): { no: string; period: string } | nu
 export function ProgressPage() {
   const [days, setDays] = useState<DayWithLines[]>([]);
   const [bills, setBills] = useState<BillRow[]>([]);
+  const [locations, setLocations] = useState<LocationRow[]>([]);
   const [labour, setLabour] = useState<LabourCost>({ wages: 0, bata: 0, total: 0 });
   const [loading, setLoading] = useState(true);
   const [labourLoading, setLabourLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState<RangeKey>("week");
   const [filter, setFilter] = useState<Filter>("ALL");
+  const [itemContract, setItemContract] = useState<Contract>("PE");
   const [showAll, setShowAll] = useState(false);
+  const [expandedItem, setExpandedItem] = useState<string | null>(null);
 
   const today = todayISO();
 
@@ -65,9 +68,10 @@ export function ProgressPage() {
 
   const load = useCallback(async () => {
     try {
-      const [d, b] = await Promise.all([fetchWork(), fetchBills()]);
+      const [d, b, l] = await Promise.all([fetchWork(), fetchBills(), fetchLocations()]);
       setDays(d);
       setBills(b);
+      setLocations(l);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load progress");
@@ -79,6 +83,10 @@ export function ProgressPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (filter !== "ALL") setItemContract(filter);
+  }, [filter]);
 
   useEffect(() => {
     let active = true;
@@ -188,6 +196,11 @@ export function ProgressPage() {
 
   const maxWeek = Math.max(1, ...weeks.map((w) => w.value));
 
+  const locationName = useMemo(
+    () => new Map(locations.map((l) => [l.id, l.name])),
+    [locations],
+  );
+
   const itemProgress = useMemo(() => {
     const map = new Map<
       string,
@@ -195,35 +208,74 @@ export function ProgressPage() {
         qty: number;
         full: number;
         claim: number;
-        contract: Contract;
-        sites: Set<string>;
-        hasAll: boolean;
+        bySite: Map<string, { qty: number; full: number; claim: number }>;
       }
     >();
-    for (const { line, day } of filtered) {
+    for (const { line, day } of allLines) {
       const item = ITEM_MAP[line.item_id];
-      if (!item) continue;
-      const cur = map.get(item.id) ?? {
-        qty: 0,
-        full: 0,
-        claim: 0,
-        contract: item.contract,
-        sites: new Set<string>(),
-        hasAll: false,
-      };
-      if (day.location_id) cur.sites.add(day.location_id);
-      else cur.hasAll = true;
-      cur.qty += Number(line.qty);
-      cur.full += Number(line.qty) * item.rate;
-      cur.claim += Number(line.qty) * claimPerUnit(item, line.stage_index);
+      if (!item || item.contract !== itemContract) continue;
+      const cur = map.get(item.id) ?? { qty: 0, full: 0, claim: 0, bySite: new Map() };
+      const qty = Number(line.qty);
+      const full = qty * item.rate;
+      const claim = qty * claimPerUnit(item, line.stage_index);
+      const siteKey = day.location_id ?? "";
+      const site = cur.bySite.get(siteKey) ?? { qty: 0, full: 0, claim: 0 };
+      site.qty += qty;
+      site.full += full;
+      site.claim += claim;
+      cur.bySite.set(siteKey, site);
+      cur.qty += qty;
+      cur.full += full;
+      cur.claim += claim;
       map.set(item.id, cur);
     }
     return [...map.entries()]
-      .map(([id, v]) => ({ item: ITEM_MAP[id], ...v }))
+      .map(([id, v]) => ({
+        item: ITEM_MAP[id] as RateItem,
+        ...v,
+        sites: [...v.bySite.entries()]
+          .map(([key, s]) => ({
+            id: key || null,
+            name: key ? locationName.get(key) ?? "Unknown site" : "All sites",
+            ...s,
+          }))
+          .sort((a, b) => b.claim - a.claim),
+      }))
       .sort((a, b) => b.claim - a.claim);
-  }, [filtered]);
+  }, [allLines, itemContract, locationName]);
 
-  const shown = showAll ? itemProgress : itemProgress.slice(0, 12);
+  const itemClaimTotal = itemProgress.reduce((s, r) => s + r.claim, 0);
+  const itemFullTotal = itemProgress.reduce((s, r) => s + r.full, 0);
+
+  const siteSummary = useMemo(() => {
+    const map = new Map<string, { qty: number; full: number; claim: number }>();
+    for (const { line, day } of allLines) {
+      const item = ITEM_MAP[line.item_id];
+      if (!item || item.contract !== itemContract) continue;
+      const key = day.location_id ?? "";
+      const cur = map.get(key) ?? { qty: 0, full: 0, claim: 0 };
+      const qty = Number(line.qty);
+      cur.qty += qty;
+      cur.full += qty * item.rate;
+      cur.claim += qty * claimPerUnit(item, line.stage_index);
+      map.set(key, cur);
+    }
+    return [...map.entries()]
+      .map(([key, v]) => ({
+        id: key || null,
+        name: key ? locationName.get(key) ?? "Unknown site" : "All sites",
+        ...v,
+      }))
+      .sort((a, b) => b.claim - a.claim);
+  }, [allLines, itemContract, locationName]);
+
+  const switchItemContract = (c: Contract) => {
+    setItemContract(c);
+    setShowAll(false);
+    setExpandedItem(null);
+  };
+
+  const shown = showAll ? itemProgress : itemProgress.slice(0, 8);
   const margin = periodTotals.claim - labour.total;
 
   return (
@@ -405,7 +457,7 @@ export function ProgressPage() {
           </Card>
 
           <Card className="overflow-hidden">
-            <div className="px-3 py-2">
+            <div className="px-3 pb-2 pt-3">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
                   Item progress
@@ -413,53 +465,148 @@ export function ProgressPage() {
                 <p className="text-[10px] text-slate-400">{itemProgress.length} items</p>
               </div>
               <p className="text-[10px] text-slate-400">
-                All work to date · sites, quantity, claimable
+                All work to date · claimed value by item and site
               </p>
-            </div>
-            {shown.map((row) => {
-              const item = row.item;
-              const siteCount = row.sites.size;
-              const siteLabel = row.hasAll
-                ? siteCount > 0
-                  ? `${siteCount} site${siteCount === 1 ? "" : "s"} + all sites`
-                  : "All sites"
-                : `${siteCount} site${siteCount === 1 ? "" : "s"}`;
-              return (
-                <div key={item?.id} className="border-t border-slate-50 px-3 py-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-xs font-semibold text-slate-800">
-                        {item?.name}
-                        <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500">
-                          {item?.contract}
-                        </span>
-                        <span className="ml-1 text-[10px] font-normal text-slate-400">
-                          {item?.detail}
-                        </span>
-                      </p>
-                      <p className="text-[10px] text-slate-500">
-                        {siteLabel} · {formatQty(row.qty)} {item?.uom}
-                      </p>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <p className="text-xs font-bold text-slate-900">{formatLakh(row.claim)}</p>
-                      <p className="text-[9px] text-slate-400">claimable</p>
-                    </div>
+
+              <div className="mt-2 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
+                {(
+                  [
+                    { id: "PE", label: "PE" },
+                    { id: "LMC", label: "LMC" },
+                  ] as { id: Contract; label: string }[]
+                ).map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => switchItemContract(c.id)}
+                    className={`rounded-lg py-2 text-xs font-semibold ${
+                      itemContract === c.id
+                        ? "bg-white text-brand-700 shadow-sm"
+                        : "text-slate-500"
+                    }`}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-3 rounded-xl bg-slate-50 p-3">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                  Claimed across all sites · {itemContract}
+                </p>
+                <p className="text-2xl font-bold text-slate-900">{formatINR2(itemClaimTotal)}</p>
+                <p className="text-[10px] text-slate-500">
+                  of {formatINR2(itemFullTotal)} work value
+                </p>
+              </div>
+
+              {siteSummary.length > 0 ? (
+                <div className="mt-3">
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                    By site
+                  </p>
+                  <div className="space-y-1">
+                    {siteSummary.map((s) => (
+                      <div
+                        key={s.id ?? "all"}
+                        className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 px-2 py-1.5"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-[11px] font-semibold text-slate-700">
+                            {s.name}
+                          </p>
+                          <p className="text-[9px] text-slate-400">
+                            {formatQty(s.qty)} qty
+                          </p>
+                        </div>
+                        <p className="shrink-0 text-[11px] font-bold text-slate-900">
+                          {formatINR(s.claim)}
+                        </p>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              );
-            })}
-            {itemProgress.length > 12 ? (
-              <button
-                onClick={() => setShowAll((v) => !v)}
-                className="w-full border-t border-slate-100 p-3 text-xs font-semibold text-brand-700"
-              >
-                {showAll ? "Show less" : `Show all ${itemProgress.length} items`}
-              </button>
-            ) : null}
+              ) : null}
+            </div>
+
             {itemProgress.length === 0 ? (
-              <p className="p-4 text-center text-sm text-slate-400">No work logged for this filter.</p>
-            ) : null}
+              <p className="border-t border-slate-100 p-4 text-center text-sm text-slate-400">
+                No {itemContract} work logged yet.
+              </p>
+            ) : (
+              <>
+                <p className="border-t border-slate-100 bg-slate-50/60 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                  Items · tap for the site split
+                </p>
+                {shown.map((row) => {
+                  const item = row.item;
+                  const open = expandedItem === item.id;
+                  const siteCount = row.sites.filter((s) => s.id !== null).length;
+                  const hasAll = row.sites.some((s) => s.id === null);
+                  const siteLabel = hasAll
+                    ? siteCount > 0
+                      ? `${siteCount} site${siteCount === 1 ? "" : "s"} + all sites`
+                      : "All sites"
+                    : `${siteCount} site${siteCount === 1 ? "" : "s"}`;
+                  return (
+                    <div key={item.id} className="border-t border-slate-100">
+                      <button
+                        onClick={() => setExpandedItem(open ? null : item.id)}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left active:bg-slate-50"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-semibold text-slate-800">
+                            {item.name}
+                          </p>
+                          <p className="truncate text-[9px] text-slate-400">{item.detail}</p>
+                          <p className="mt-0.5 text-[10px] text-slate-500">
+                            {siteLabel} · {formatQty(row.qty)} {item.uom}
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="text-xs font-bold text-slate-900">{formatINR(row.claim)}</p>
+                          <p className="text-[9px] font-medium text-brand-700">
+                            {open ? "hide sites" : "by site"}
+                          </p>
+                        </div>
+                      </button>
+                      {open ? (
+                        <div className="bg-slate-50/70 px-3 pb-2">
+                          {row.sites.map((s) => (
+                            <div
+                              key={s.id ?? "all"}
+                              className="flex items-center justify-between gap-2 border-t border-slate-100 py-1.5 first:border-0"
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate text-[10px] font-semibold text-slate-700">
+                                  {s.name}
+                                </p>
+                                <p className="text-[9px] text-slate-400">
+                                  {formatQty(s.qty)} {item.uom}
+                                </p>
+                              </div>
+                              <p className="shrink-0 text-[10px] font-semibold text-slate-800">
+                                {formatINR(s.claim)}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+                {itemProgress.length > 8 ? (
+                  <button
+                    onClick={() => setShowAll((v) => !v)}
+                    className="w-full border-t border-slate-100 p-3 text-xs font-semibold text-brand-700"
+                  >
+                    {showAll ? "Show less" : `Show all ${itemProgress.length} items`}
+                  </button>
+                ) : null}
+                <p className="border-t border-slate-100 px-3 py-2 text-[9px] text-slate-400">
+                  “All sites” is work logged without a selected site (RA-01 baseline).
+                </p>
+              </>
+            )}
           </Card>
 
           <Card className="p-3">
