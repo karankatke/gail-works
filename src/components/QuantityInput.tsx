@@ -153,7 +153,6 @@ export function QuantityInput({
           <span className="mb-1 block text-xs font-medium text-slate-600">Quantity ({uom})</span>
           <input
             inputMode="decimal"
-            autoFocus
             value={sorQty}
             onChange={(e) => setSorQty(e.target.value)}
             placeholder="0"
@@ -167,7 +166,6 @@ export function QuantityInput({
           <span className="mb-1 block text-xs font-medium text-slate-600">Area (ft²)</span>
           <input
             inputMode="decimal"
-            autoFocus
             value={sqft}
             onChange={(e) => setSqft(e.target.value)}
             placeholder="0"
@@ -179,7 +177,6 @@ export function QuantityInput({
           <span className="mb-1 block text-xs font-medium text-slate-600">Volume (ft³)</span>
           <input
             inputMode="decimal"
-            autoFocus
             value={cft}
             onChange={(e) => setCft(e.target.value)}
             placeholder="0"

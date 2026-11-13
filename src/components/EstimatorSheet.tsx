@@ -1,14 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Modal, inputClass } from "./ui";
 import { ItemSearchList } from "./RateBits";
 import { EstimateLineModal } from "./EstimateLineModal";
-import {
-  ITEM_MAP,
-  LMC_ITEMS,
-  PE_ITEMS,
-  type Contract,
-  type RateItem,
-} from "../lib/rates";
+import { ITEM_MAP, LMC_ITEMS, PE_ITEMS, type Contract, type RateItem } from "../lib/rates";
 import { formatINR, formatINR2, formatQty, formatRate } from "../lib/format";
 import { addDays, prettyDate, todayISO } from "../lib/dates";
 import {
@@ -21,9 +15,11 @@ import {
 import type { EstimateWithLines, LocationRow } from "../lib/types";
 
 type DraftLine = { item: RateItem; qty: number; inputText: string; rate: number };
+type SubMode = "per_meter" | "per_flat";
 
 function toDraftLines(estimate: EstimateWithLines | null | undefined): DraftLine[] {
-  return (estimate?.lines ?? [])
+  return [...(estimate?.lines ?? [])]
+    .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""))
     .map((l) => {
       const item = ITEM_MAP[l.item_id];
       if (!item) return null;
@@ -39,9 +35,18 @@ function toDraftLines(estimate: EstimateWithLines | null | undefined): DraftLine
 
 function estimateTotals(e: EstimateWithLines) {
   const work = e.lines.reduce((s, l) => s + Number(l.qty) * Number(l.rate), 0);
-  const labour = Number(e.crew_days) * Number(e.daily_labour_cost);
-  return { work, profit: work - Number(e.material_cost) - labour };
+  const sub = Number(e.subcontract_rate) * Number(e.subcontract_qty);
+  const other =
+    sub +
+    Number(e.drawing_cost ?? 0) +
+    Number(e.conversion_cost ?? 0) +
+    Number(e.misc_cost ?? 0);
+  const cost =
+    Number(e.material_cost ?? 0) + Number(e.crew_days) * Number(e.daily_labour_cost) + other;
+  return { work, profit: work - cost };
 }
+
+const compactInput = `${inputClass} py-2 text-sm`;
 
 export function EstimatorSheet({
   initialContract,
@@ -57,9 +62,7 @@ export function EstimatorSheet({
   onSaved?: () => void;
 }) {
   const [tab, setTab] = useState<"new" | "saved">(initialEstimate ? "new" : initialTab);
-  const [contract, setContract] = useState<Contract>(
-    initialEstimate?.contract ?? initialContract,
-  );
+  const [contract, setContract] = useState<Contract>(initialEstimate?.contract ?? initialContract);
   const [estimateId, setEstimateId] = useState<string | null>(initialEstimate?.id ?? null);
   const [name, setName] = useState(initialEstimate?.name ?? "");
   const [locationId, setLocationId] = useState(initialEstimate?.location_id ?? "");
@@ -72,6 +75,32 @@ export function EstimatorSheet({
   const [dailyLabourCost, setDailyLabourCost] = useState(
     initialEstimate ? String(initialEstimate.daily_labour_cost ?? "") : "",
   );
+  const [subMode, setSubMode] = useState<SubMode>(
+    initialEstimate?.subcontract_mode ?? "per_meter",
+  );
+  const [subRate, setSubRate] = useState(
+    initialEstimate && Number(initialEstimate.subcontract_rate)
+      ? String(initialEstimate.subcontract_rate)
+      : "",
+  );
+  const [subQty, setSubQty] = useState(
+    initialEstimate && Number(initialEstimate.subcontract_qty)
+      ? String(initialEstimate.subcontract_qty)
+      : "",
+  );
+  const [drawingCost, setDrawingCost] = useState(
+    initialEstimate && Number(initialEstimate.drawing_cost)
+      ? String(initialEstimate.drawing_cost)
+      : "",
+  );
+  const [conversionCost, setConversionCost] = useState(
+    initialEstimate && Number(initialEstimate.conversion_cost)
+      ? String(initialEstimate.conversion_cost)
+      : "",
+  );
+  const [miscCost, setMiscCost] = useState(
+    initialEstimate && Number(initialEstimate.misc_cost) ? String(initialEstimate.misc_cost) : "",
+  );
   const [note, setNote] = useState(initialEstimate?.note ?? "");
   const [lines, setLines] = useState<DraftLine[]>(() => toDraftLines(initialEstimate));
 
@@ -79,11 +108,14 @@ export function EstimatorSheet({
   const [locations, setLocations] = useState<LocationRow[]>([]);
   const [labourAvg, setLabourAvg] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
+  const [itemQuery, setItemQuery] = useState("");
   const [pendingItem, setPendingItem] = useState<RateItem | null>(null);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
+  const itemScrollRef = useRef(0);
+  const itemListRef = useRef<HTMLDivElement | null>(null);
 
   const loadSaved = useCallback(async () => {
     try {
@@ -118,15 +150,24 @@ export function EstimatorSheet({
     };
   }, [initialEstimate]);
 
-  const workValue = useMemo(
-    () => lines.reduce((s, l) => s + l.qty * l.rate, 0),
-    [lines],
-  );
+  useEffect(() => {
+    if (!adding) return;
+    const el = itemListRef.current;
+    if (el) el.scrollTop = itemScrollRef.current;
+  }, [adding]);
+
+  const workValue = useMemo(() => lines.reduce((s, l) => s + l.qty * l.rate, 0), [lines]);
   const material = Number(materialCost) || 0;
   const days = Number(crewDays) || 0;
   const daily = Number(dailyLabourCost) || 0;
   const labour = days * daily;
-  const profit = workValue - material - labour;
+  const sub = (Number(subRate) || 0) * (Number(subQty) || 0);
+  const drawing = Number(drawingCost) || 0;
+  const conversion = Number(conversionCost) || 0;
+  const misc = Number(miscCost) || 0;
+  const other = sub + drawing + conversion + misc;
+  const totalCost = material + labour + other;
+  const profit = workValue - totalCost;
   const margin = workValue > 0 ? profit / workValue : 0;
   const canSwitchContract = lines.length === 0 && !estimateId;
 
@@ -137,12 +178,20 @@ export function EstimatorSheet({
     setLocationId("");
     setMaterialCost("");
     setCrewDays("");
+    setSubMode("per_meter");
+    setSubRate("");
+    setSubQty("");
+    setDrawingCost("");
+    setConversionCost("");
+    setMiscCost("");
     setNote("");
     setLines([]);
     setContract(initialContract);
     setAdding(false);
     setPendingItem(null);
     setEditingIndex(null);
+    setItemQuery("");
+    itemScrollRef.current = 0;
     setSavedMsg(null);
     setError(null);
   };
@@ -153,14 +202,22 @@ export function EstimatorSheet({
     setName(e.name);
     setContract(e.contract);
     setLocationId(e.location_id ?? "");
-    setMaterialCost(String(e.material_cost ?? ""));
-    setCrewDays(String(e.crew_days ?? ""));
-    setDailyLabourCost(String(e.daily_labour_cost ?? ""));
+    setMaterialCost(e.material_cost ? String(e.material_cost) : "");
+    setCrewDays(e.crew_days ? String(e.crew_days) : "");
+    setDailyLabourCost(e.daily_labour_cost ? String(e.daily_labour_cost) : "");
+    setSubMode(e.subcontract_mode ?? "per_meter");
+    setSubRate(e.subcontract_rate ? String(e.subcontract_rate) : "");
+    setSubQty(e.subcontract_qty ? String(e.subcontract_qty) : "");
+    setDrawingCost(e.drawing_cost ? String(e.drawing_cost) : "");
+    setConversionCost(e.conversion_cost ? String(e.conversion_cost) : "");
+    setMiscCost(e.misc_cost ? String(e.misc_cost) : "");
     setNote(e.note ?? "");
     setLines(toDraftLines(e));
     setAdding(false);
     setPendingItem(null);
     setEditingIndex(null);
+    setItemQuery("");
+    itemScrollRef.current = 0;
     setSavedMsg(null);
     setError(null);
   };
@@ -186,13 +243,11 @@ export function EstimatorSheet({
   const saveLine = (qty: number, inputText: string) => {
     if (!pendingItem) return;
     if (editingIndex != null) {
-      setLines((prev) =>
-        prev.map((l, i) => (i === editingIndex ? { ...l, qty, inputText } : l)),
-      );
+      setLines((prev) => prev.map((l, i) => (i === editingIndex ? { ...l, qty, inputText } : l)));
     } else {
       setLines((prev) => [
-        ...prev,
         { item: pendingItem, qty, inputText, rate: pendingItem.rate },
+        ...prev,
       ]);
     }
     setPendingItem(null);
@@ -220,6 +275,12 @@ export function EstimatorSheet({
         material_cost: material,
         crew_days: days,
         daily_labour_cost: daily,
+        subcontract_mode: subMode,
+        subcontract_rate: Number(subRate) || 0,
+        subcontract_qty: Number(subQty) || 0,
+        drawing_cost: drawing,
+        conversion_cost: conversion,
+        misc_cost: misc,
         note: note.trim() || null,
         lines: lines.map((l) => ({
           item_id: l.item.id,
@@ -241,7 +302,7 @@ export function EstimatorSheet({
   };
 
   return (
-    <Modal title="Estimate" onClose={onClose} full>
+    <Modal title="Estimate" onClose={onClose} wide>
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
           <button
@@ -306,232 +367,380 @@ export function EstimatorSheet({
           </>
         ) : (
           <>
-            {canSwitchContract ? (
-              <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
-                {(["PE", "LMC"] as Contract[]).map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => setContract(c)}
-                    className={`rounded-lg py-2 text-xs font-semibold ${
-                      contract === c ? "bg-white text-brand-700 shadow-sm" : "text-slate-500"
-                    }`}
-                  >
-                    {c === "PE" ? "PE pipe laying" : "LMC"}
-                  </button>
-                ))}
+            <div className="grid gap-2 lg:grid-cols-3">
+              <div className="lg:col-span-1">
+                {canSwitchContract ? (
+                  <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
+                    {(["PE", "LMC"] as Contract[]).map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => setContract(c)}
+                        className={`rounded-lg py-2 text-xs font-semibold ${
+                          contract === c
+                            ? "bg-white text-brand-700 shadow-sm"
+                            : "text-slate-500"
+                        }`}
+                      >
+                        {c === "PE" ? "PE pipe laying" : "LMC"}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="rounded-xl bg-slate-50 px-3 py-2.5 text-xs font-semibold text-brand-700">
+                    {contract === "PE" ? "PE pipe laying" : "LMC"}
+                  </p>
+                )}
               </div>
-            ) : (
-              <p className="text-xs font-semibold text-brand-700">
-                {contract === "PE" ? "PE pipe laying" : "LMC"}
-              </p>
-            )}
-
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-slate-600">Estimate name</span>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className={inputClass}
-                placeholder="e.g. Arvind Sporcia - 40 flats"
-              />
-            </label>
-
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-slate-600">Site (optional)</span>
-              <select
-                value={locationId}
-                onChange={(e) => setLocationId(e.target.value)}
-                className={inputClass}
-              >
-                <option value="">No site</option>
-                {locations.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+              <label className="block lg:col-span-2">
+                <span className="mb-1 block text-xs font-medium text-slate-600">Estimate name</span>
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className={inputClass}
+                  placeholder="e.g. Arvind Sporcia - 40 flats"
+                />
+              </label>
+              <label className="block lg:col-span-3">
+                <span className="mb-1 block text-xs font-medium text-slate-600">
+                  Site (optional)
+                </span>
+                <select
+                  value={locationId}
+                  onChange={(e) => setLocationId(e.target.value)}
+                  className={inputClass}
+                >
+                  <option value="">No site</option>
+                  {locations.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
 
             <div className="rounded-2xl bg-slate-900 p-4 text-white">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
-                Claimable at completion · excl. GST
-              </p>
-              <p className="text-3xl font-bold">{formatINR(workValue)}</p>
-              <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+              <div className="flex flex-wrap items-end justify-between gap-3">
                 <div>
-                  <p className="text-[9px] text-slate-400">Material</p>
-                  <p className="text-sm font-semibold">{formatINR(material)}</p>
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                    Claimable at completion · excl. GST
+                  </p>
+                  <p className="text-3xl font-bold">{formatINR(workValue)}</p>
+                  <p className="text-[9px] text-slate-400">
+                    Bill incl. 18% GST {formatINR(workValue * 1.18)}
+                  </p>
                 </div>
-                <div>
-                  <p className="text-[9px] text-slate-400">Labour</p>
-                  <p className="text-sm font-semibold">{formatINR(labour)}</p>
-                </div>
-                <div>
-                  <p className="text-[9px] text-slate-400">Profit</p>
+                <div className="text-right">
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                    Estimated profit
+                  </p>
                   <p
-                    className={`text-sm font-semibold ${
+                    className={`text-2xl font-bold ${
                       profit >= 0 ? "text-emerald-300" : "text-red-300"
                     }`}
                   >
                     {formatINR(profit)}
                   </p>
+                  <p className="text-[9px] text-slate-400">
+                    Margin {workValue > 0 ? `${Math.round(margin * 100)}%` : "—"}
+                  </p>
                 </div>
               </div>
-              <div className="mt-2 flex items-center justify-between text-[9px] text-slate-400">
-                <span>Margin {workValue > 0 ? `${Math.round(margin * 100)}%` : "—"}</span>
-                <span>Bill incl. 18% GST {formatINR(workValue * 1.18)}</span>
+              <div className="mt-3 grid grid-cols-2 gap-2 border-t border-white/10 pt-2 text-[10px] text-slate-400 sm:grid-cols-4">
+                <div>
+                  Material <b className="text-white">{formatINR(material)}</b>
+                </div>
+                <div>
+                  Labour <b className="text-white">{formatINR(labour)}</b>
+                </div>
+                <div>
+                  Other <b className="text-white">{formatINR(other)}</b>
+                </div>
+                <div>
+                  Total cost <b className="text-white">{formatINR(totalCost)}</b>
+                </div>
               </div>
             </div>
 
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                Items ({lines.length})
-              </p>
-              {!adding ? (
-                <button
-                  onClick={() => setAdding(true)}
-                  className="text-[11px] font-semibold text-brand-700"
-                >
-                  + Add items
-                </button>
-              ) : null}
-            </div>
-
-            {adding ? (
-              <div className="rounded-xl border border-slate-200 p-2">
-                <div className="mb-2 flex items-center justify-between">
-                  <p className="text-[11px] font-semibold text-slate-600">Add items</p>
-                  <button
-                    onClick={() => setAdding(false)}
-                    className="text-[10px] font-medium text-slate-400"
-                  >
-                    cancel
-                  </button>
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                    Items ({lines.length})
+                  </p>
                 </div>
-                <div className="max-h-64 overflow-y-auto">
-                  <ItemSearchList
-                    items={contract === "PE" ? PE_ITEMS : LMC_ITEMS}
-                    onPick={(item) => {
-                      setAdding(false);
-                      openLine(item);
-                    }}
-                  />
-                </div>
-              </div>
-            ) : null}
 
-            {lines.length === 0 ? (
-              <p className="rounded-xl bg-slate-50 p-3 text-center text-xs text-slate-400">
-                No items yet. Tap Add items.
-              </p>
-            ) : (
-              <div className="rounded-xl border border-slate-100">
-                {lines.map((l, idx) => (
-                  <div
-                    key={`${l.item.id}-${idx}`}
-                    className="flex items-center justify-between gap-2 border-b border-slate-50 px-3 py-2 last:border-0"
-                  >
-                    <button onClick={() => openLine(l.item)} className="min-w-0 flex-1 text-left">
-                      <p className="truncate text-xs font-semibold text-slate-800">
-                        {l.item.name}
-                      </p>
-                      <p className="truncate text-[10px] text-slate-500">
-                        {formatQty(l.qty)} {l.item.uom} · {formatRate(l.rate)} / {l.item.uom}
-                      </p>
-                      {l.inputText ? (
-                        <p className="truncate text-[10px] text-slate-400">
-                          Entered: {l.inputText}
-                        </p>
-                      ) : null}
-                    </button>
-                    <div className="shrink-0 text-right">
-                      <p className="text-xs font-bold text-slate-900">
-                        {formatINR2(l.qty * l.rate)}
-                      </p>
+                {!adding ? (
+                  <Button onClick={() => setAdding(true)} className="w-full py-3 text-sm">
+                    + Add items
+                  </Button>
+                ) : (
+                  <div className="rounded-xl border border-slate-200 p-2">
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-[11px] font-semibold text-slate-600">Add items</p>
                       <button
-                        onClick={() => setLines((prev) => prev.filter((_, i) => i !== idx))}
-                        className="text-[10px] font-medium text-red-500"
+                        onClick={() => setAdding(false)}
+                        className="text-[10px] font-semibold text-brand-700"
                       >
-                        remove
+                        Done adding
                       </button>
                     </div>
+                    <div
+                      ref={itemListRef}
+                      onScroll={(e) => {
+                        itemScrollRef.current = e.currentTarget.scrollTop;
+                      }}
+                      className="max-h-72 overflow-y-auto"
+                    >
+                      <ItemSearchList
+                        items={contract === "PE" ? PE_ITEMS : LMC_ITEMS}
+                        query={itemQuery}
+                        onQueryChange={(q) => {
+                          setItemQuery(q);
+                          itemScrollRef.current = 0;
+                          if (itemListRef.current) itemListRef.current.scrollTop = 0;
+                        }}
+                        onPick={(item) => {
+                          setAdding(false);
+                          openLine(item);
+                        }}
+                      />
+                    </div>
                   </div>
-                ))}
-              </div>
-            )}
+                )}
 
-            <div className="space-y-2 rounded-2xl border border-slate-100 p-3">
-              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Costs</p>
-              <label className="block">
-                <span className="mb-1 block text-[10px] font-medium text-slate-500">
-                  Material cost (₹)
-                </span>
-                <input
-                  inputMode="decimal"
-                  value={materialCost}
-                  onChange={(e) => setMaterialCost(e.target.value)}
-                  className={inputClass}
-                  placeholder="0"
-                />
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <label className="block">
-                  <span className="mb-1 block text-[10px] font-medium text-slate-500">
-                    Crew days
-                  </span>
-                  <input
-                    inputMode="decimal"
-                    value={crewDays}
-                    onChange={(e) => setCrewDays(e.target.value)}
-                    className={inputClass}
-                    placeholder="0"
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-[10px] font-medium text-slate-500">
-                    Daily labour (₹)
-                  </span>
-                  <input
-                    inputMode="decimal"
-                    value={dailyLabourCost}
-                    onChange={(e) => setDailyLabourCost(e.target.value)}
-                    className={inputClass}
-                    placeholder="0"
-                  />
-                </label>
+                {lines.length === 0 ? (
+                  <p className="rounded-xl bg-slate-50 p-3 text-center text-xs text-slate-400">
+                    No items yet. Tap Add items.
+                  </p>
+                ) : (
+                  <div className="rounded-xl border border-slate-100">
+                    {lines.map((l, idx) => (
+                      <div
+                        key={`${l.item.id}-${idx}`}
+                        className="flex items-center justify-between gap-2 border-b border-slate-50 px-3 py-2 last:border-0"
+                      >
+                        <button
+                          onClick={() => openLine(l.item)}
+                          className="min-w-0 flex-1 text-left"
+                        >
+                          <p className="truncate text-xs font-semibold text-slate-800">
+                            {l.item.name}
+                          </p>
+                          <p className="truncate text-[10px] text-slate-500">
+                            {formatQty(l.qty)} {l.item.uom} · {formatRate(l.rate)} / {l.item.uom}
+                          </p>
+                          {l.inputText ? (
+                            <p className="truncate text-[10px] text-slate-400">
+                              Entered: {l.inputText}
+                            </p>
+                          ) : null}
+                        </button>
+                        <div className="shrink-0 text-right">
+                          <p className="text-xs font-bold text-slate-900">
+                            {formatINR2(l.qty * l.rate)}
+                          </p>
+                          <button
+                            onClick={() =>
+                              setLines((prev) => prev.filter((_, i) => i !== idx))
+                            }
+                            className="text-[10px] font-medium text-red-500"
+                          >
+                            remove
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              <p className="text-[10px] text-slate-400">
-                {labourAvg
-                  ? `Daily labour prefilled from the last 7 days (wages + bata): ${formatINR(labourAvg)}. Change it for a different crew.`
-                  : "Enter the crew cost per day."}
-              </p>
-              <div className="flex justify-between border-t border-slate-100 pt-2 text-xs">
-                <span className="text-slate-500">Labour total</span>
-                <span className="font-semibold text-slate-900">{formatINR(labour)}</span>
+
+              <div className="space-y-3">
+                <div className="space-y-2.5 rounded-2xl border border-slate-100 p-3">
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Costs</p>
+                  <label className="block">
+                    <span className="mb-1 block text-[10px] font-medium text-slate-500">
+                      Material cost (₹)
+                    </span>
+                    <input
+                      inputMode="decimal"
+                      value={materialCost}
+                      onChange={(e) => setMaterialCost(e.target.value)}
+                      className={compactInput}
+                      placeholder="0"
+                    />
+                  </label>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="block">
+                      <span className="mb-1 block text-[10px] font-medium text-slate-500">
+                        Crew days
+                      </span>
+                      <input
+                        inputMode="decimal"
+                        value={crewDays}
+                        onChange={(e) => setCrewDays(e.target.value)}
+                        className={compactInput}
+                        placeholder="0"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-[10px] font-medium text-slate-500">
+                        Daily labour (₹)
+                      </span>
+                      <input
+                        inputMode="decimal"
+                        value={dailyLabourCost}
+                        onChange={(e) => setDailyLabourCost(e.target.value)}
+                        className={compactInput}
+                        placeholder="0"
+                      />
+                    </label>
+                  </div>
+                  <p className="text-[10px] text-slate-400">
+                    {labourAvg
+                      ? `Daily labour prefilled from the last 7 days: ${formatINR(labourAvg)}.`
+                      : "Enter the crew cost per day."}{" "}
+                    Labour total {formatINR(labour)}.
+                  </p>
+
+                  <div className="border-t border-slate-100 pt-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[11px] font-semibold text-slate-600">Subcontract</p>
+                      <p className="text-[11px] font-semibold text-slate-900">{formatINR(sub)}</p>
+                    </div>
+                    <div className="mt-1 grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1">
+                      {(
+                        [
+                          { id: "per_meter" as const, label: "Per metre" },
+                          { id: "per_flat" as const, label: "Per flat" },
+                        ]
+                      ).map((m) => (
+                        <button
+                          key={m.id}
+                          onClick={() => setSubMode(m.id)}
+                          className={`rounded-md py-1.5 text-[10px] font-semibold ${
+                            subMode === m.id
+                              ? "bg-white text-brand-700 shadow-sm"
+                              : "text-slate-500"
+                          }`}
+                        >
+                          {m.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <label className="block">
+                        <span className="mb-1 block text-[10px] font-medium text-slate-500">
+                          {subMode === "per_meter" ? "Rate (₹/m)" : "Rate (₹/flat)"}
+                        </span>
+                        <input
+                          inputMode="decimal"
+                          value={subRate}
+                          onChange={(e) => setSubRate(e.target.value)}
+                          className={compactInput}
+                          placeholder="0"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="mb-1 block text-[10px] font-medium text-slate-500">
+                          {subMode === "per_meter" ? "Metres" : "Flats"}
+                        </span>
+                        <input
+                          inputMode="decimal"
+                          value={subQty}
+                          onChange={(e) => setSubQty(e.target.value)}
+                          className={compactInput}
+                          placeholder="0"
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-2">
+                    <label className="block">
+                      <span className="mb-1 block text-[10px] font-medium text-slate-500">
+                        Drawings (₹)
+                      </span>
+                      <input
+                        inputMode="decimal"
+                        value={drawingCost}
+                        onChange={(e) => setDrawingCost(e.target.value)}
+                        className={compactInput}
+                        placeholder="0"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-[10px] font-medium text-slate-500">
+                        Conversion (₹)
+                      </span>
+                      <input
+                        inputMode="decimal"
+                        value={conversionCost}
+                        onChange={(e) => setConversionCost(e.target.value)}
+                        className={compactInput}
+                        placeholder="0"
+                      />
+                    </label>
+                    <label className="col-span-2 block">
+                      <span className="mb-1 block text-[10px] font-medium text-slate-500">
+                        Miscellaneous (₹)
+                      </span>
+                      <input
+                        inputMode="decimal"
+                        value={miscCost}
+                        onChange={(e) => setMiscCost(e.target.value)}
+                        className={compactInput}
+                        placeholder="0"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="flex justify-between border-t border-slate-100 pt-2 text-xs">
+                    <span className="text-slate-500">Total cost</span>
+                    <span className="font-bold text-slate-900">{formatINR(totalCost)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-500">Estimated profit</span>
+                    <span
+                      className={`font-bold ${
+                        profit >= 0 ? "text-emerald-700" : "text-red-600"
+                      }`}
+                    >
+                      {formatINR(profit)}
+                    </span>
+                  </div>
+                </div>
+
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-slate-600">
+                    Note (optional)
+                  </span>
+                  <input
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    className={inputClass}
+                    placeholder="optional"
+                  />
+                </label>
+
+                {error ? (
+                  <p className="rounded-xl bg-red-50 p-2 text-xs text-red-700">{error}</p>
+                ) : null}
+                {savedMsg ? (
+                  <p className="text-xs font-medium text-emerald-700">{savedMsg}</p>
+                ) : null}
+
+                <Button onClick={save} disabled={saving} className="w-full py-3">
+                  {saving ? "Saving…" : estimateId ? "Update estimate" : "Save estimate"}
+                </Button>
+                {estimateId ? (
+                  <Button variant="secondary" onClick={reset} className="w-full">
+                    Start a new estimate
+                  </Button>
+                ) : null}
               </div>
             </div>
-
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-slate-600">Note (optional)</span>
-              <input
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                className={inputClass}
-                placeholder="optional"
-              />
-            </label>
-
-            {error ? <p className="rounded-xl bg-red-50 p-2 text-xs text-red-700">{error}</p> : null}
-            {savedMsg ? <p className="text-xs font-medium text-emerald-700">{savedMsg}</p> : null}
-
-            <Button onClick={save} disabled={saving} className="w-full py-3">
-              {saving ? "Saving…" : estimateId ? "Update estimate" : "Save estimate"}
-            </Button>
-            {estimateId ? (
-              <Button variant="secondary" onClick={reset} className="w-full">
-                Start a new estimate
-              </Button>
-            ) : null}
           </>
         )}
 

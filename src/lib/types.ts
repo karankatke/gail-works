@@ -69,6 +69,12 @@ export interface EstimateRow {
   material_cost: number;
   crew_days: number;
   daily_labour_cost: number;
+  subcontract_mode: "per_meter" | "per_flat" | null;
+  subcontract_rate: number;
+  subcontract_qty: number;
+  drawing_cost: number;
+  conversion_cost: number;
+  misc_cost: number;
   note: string | null;
   created_at: string;
   updated_at: string;
@@ -82,6 +88,7 @@ export interface EstimateLineRow {
   uom: string;
   rate: number;
   input_text: string | null;
+  created_at: string;
 }
 
 export interface EstimateWithLines extends EstimateRow {

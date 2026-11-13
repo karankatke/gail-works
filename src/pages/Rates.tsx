@@ -205,8 +205,9 @@ export function RatesPage() {
         </Card>
       ) : null}
 
-      {!results
-        ? CATEGORIES[contract].map((cat) => {
+      {!results ? (
+        <div className="space-y-3 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0">
+          {CATEGORIES[contract].map((cat) => {
             const list = grouped[cat] ?? [];
             if (list.length === 0) return null;
             return (
@@ -220,8 +221,9 @@ export function RatesPage() {
                 ))}
               </Card>
             );
-          })
-        : null}
+          })}
+        </div>
+      ) : null}
 
       <p className="px-1 pb-2 text-[11px] text-slate-400">
         Final LOA rates, excluding GST. Stage percentages decide what can be claimed now.

@@ -261,6 +261,12 @@ export async function saveEstimate(input: {
   material_cost: number;
   crew_days: number;
   daily_labour_cost: number;
+  subcontract_mode: "per_meter" | "per_flat" | null;
+  subcontract_rate: number;
+  subcontract_qty: number;
+  drawing_cost: number;
+  conversion_cost: number;
+  misc_cost: number;
   note: string | null;
   lines: { item_id: string; qty: number; uom: string; rate: number; input_text: string | null }[];
 }): Promise<string> {
@@ -273,6 +279,12 @@ export async function saveEstimate(input: {
     p_material_cost: input.material_cost,
     p_crew_days: input.crew_days,
     p_daily_labour_cost: input.daily_labour_cost,
+    p_subcontract_mode: input.subcontract_mode,
+    p_subcontract_rate: input.subcontract_rate,
+    p_subcontract_qty: input.subcontract_qty,
+    p_drawing_cost: input.drawing_cost,
+    p_conversion_cost: input.conversion_cost,
+    p_misc_cost: input.misc_cost,
     p_note: input.note,
     p_lines: input.lines,
   });

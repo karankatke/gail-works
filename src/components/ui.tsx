@@ -92,11 +92,13 @@ export function Modal({
   children,
   onClose,
   full,
+  wide,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   full?: boolean;
+  wide?: boolean;
 }) {
   const idRef = useRef(0);
   if (!idRef.current) idRef.current = ++modalSeq;
@@ -149,7 +151,7 @@ export function Modal({
     >
       <div
         className={`max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-white p-5 sm:rounded-3xl ${
-          full ? "max-w-2xl" : "max-w-md"
+          wide ? "max-w-5xl" : full ? "max-w-2xl" : "max-w-md"
         }`}
       >
         <div className="mb-4">

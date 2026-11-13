@@ -116,6 +116,12 @@ create table if not exists public.sor_estimates (
   material_cost      numeric(14,2) not null default 0,
   crew_days          numeric(10,2) not null default 0,
   daily_labour_cost  numeric(14,2) not null default 0,
+  subcontract_mode   text check (subcontract_mode in ('per_meter', 'per_flat')),
+  subcontract_rate   numeric(14,2) not null default 0,
+  subcontract_qty    numeric(14,3) not null default 0,
+  drawing_cost       numeric(14,2) not null default 0,
+  conversion_cost    numeric(14,2) not null default 0,
+  misc_cost          numeric(14,2) not null default 0,
   note               text,
   created_at         timestamptz not null default now(),
   updated_at         timestamptz not null default now()
@@ -153,6 +159,8 @@ create policy "sor_estimate_lines_owner_all"
   with check (public.is_owner());
 
 -- Save/update the estimate and replace its lines in one transaction.
+drop function if exists public.save_estimate(uuid, text, text, uuid, numeric, numeric, numeric, text, jsonb);
+
 create or replace function public.save_estimate(
   p_id uuid,
   p_name text,
@@ -161,6 +169,12 @@ create or replace function public.save_estimate(
   p_material_cost numeric,
   p_crew_days numeric,
   p_daily_labour_cost numeric,
+  p_subcontract_mode text,
+  p_subcontract_rate numeric,
+  p_subcontract_qty numeric,
+  p_drawing_cost numeric,
+  p_conversion_cost numeric,
+  p_misc_cost numeric,
   p_note text,
   p_lines jsonb
 ) returns uuid
@@ -172,9 +186,13 @@ declare
 begin
   if p_id is null then
     insert into public.sor_estimates
-      (name, contract, location_id, material_cost, crew_days, daily_labour_cost, note)
+      (name, contract, location_id, material_cost, crew_days, daily_labour_cost,
+       subcontract_mode, subcontract_rate, subcontract_qty, drawing_cost,
+       conversion_cost, misc_cost, note)
     values
-      (p_name, p_contract, p_location_id, p_material_cost, p_crew_days, p_daily_labour_cost, p_note)
+      (p_name, p_contract, p_location_id, p_material_cost, p_crew_days, p_daily_labour_cost,
+       p_subcontract_mode, p_subcontract_rate, p_subcontract_qty, p_drawing_cost,
+       p_conversion_cost, p_misc_cost, p_note)
     returning id into v_id;
   else
     update public.sor_estimates
@@ -184,6 +202,12 @@ begin
         material_cost = p_material_cost,
         crew_days = p_crew_days,
         daily_labour_cost = p_daily_labour_cost,
+        subcontract_mode = p_subcontract_mode,
+        subcontract_rate = p_subcontract_rate,
+        subcontract_qty = p_subcontract_qty,
+        drawing_cost = p_drawing_cost,
+        conversion_cost = p_conversion_cost,
+        misc_cost = p_misc_cost,
         note = p_note,
         updated_at = now()
     where id = p_id
@@ -200,5 +224,5 @@ begin
 end;
 $$;
 
-revoke all on function public.save_estimate(uuid, text, text, uuid, numeric, numeric, numeric, text, jsonb) from public;
-grant execute on function public.save_estimate(uuid, text, text, uuid, numeric, numeric, numeric, text, jsonb) to authenticated;
+revoke all on function public.save_estimate(uuid, text, text, uuid, numeric, numeric, numeric, text, numeric, numeric, numeric, numeric, numeric, text, jsonb) from public;
+grant execute on function public.save_estimate(uuid, text, text, uuid, numeric, numeric, numeric, text, numeric, numeric, numeric, numeric, numeric, text, jsonb) to authenticated;

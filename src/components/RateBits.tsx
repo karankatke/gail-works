@@ -7,11 +7,17 @@ import { FT2_TO_M2, FT3_TO_M3, formatFtIn, ftInToM, round3 } from "../lib/units"
 export function ItemSearchList({
   items,
   onPick,
+  query,
+  onQueryChange,
 }: {
   items: RateItem[];
   onPick: (item: RateItem) => void;
+  query?: string;
+  onQueryChange?: (q: string) => void;
 }) {
-  const [q, setQ] = useState("");
+  const [internalQuery, setInternalQuery] = useState("");
+  const q = query ?? internalQuery;
+  const setQ = onQueryChange ?? setInternalQuery;
   const list = useMemo(() => {
     const needle = q.trim().toLowerCase();
     if (!needle) return items;
@@ -25,14 +31,13 @@ export function ItemSearchList({
         onChange={(e) => setQ(e.target.value)}
         placeholder="Search: 32, 1 inch, meter, valve…"
         className={`${inputClass} mb-3 py-2 text-sm`}
-        autoFocus
       />
       <div className="space-y-1.5">
         {list.map((i) => (
           <button
             key={i.id}
             onClick={() => onPick(i)}
-            className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-100 p-3 text-left active:bg-slate-50"
+            className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-100 p-2.5 text-left active:bg-slate-50"
           >
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-slate-900">{i.name}</p>
@@ -317,7 +322,6 @@ export function AddLineModal({
             </span>
             <input
               inputMode="decimal"
-              autoFocus
               value={sorQty}
               onChange={(e) => setSorQty(e.target.value)}
               placeholder="0"
@@ -331,7 +335,6 @@ export function AddLineModal({
             <span className="mb-1 block text-xs font-medium text-slate-600">Area (ft²)</span>
             <input
               inputMode="decimal"
-              autoFocus
               value={sqft}
               onChange={(e) => setSqft(e.target.value)}
               placeholder="0"
@@ -343,7 +346,6 @@ export function AddLineModal({
             <span className="mb-1 block text-xs font-medium text-slate-600">Volume (ft³)</span>
             <input
               inputMode="decimal"
-              autoFocus
               value={cft}
               onChange={(e) => setCft(e.target.value)}
               placeholder="0"

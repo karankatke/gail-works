@@ -40,16 +40,16 @@ export function Layout({
   return (
     <div className="flex min-h-full flex-col">
       <header className="sticky top-0 z-20 bg-brand-800 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] text-white shadow-sm">
-        <div className="mx-auto max-w-2xl text-center">
+        <div className="mx-auto max-w-2xl text-center lg:max-w-6xl">
           <h1 className="text-lg font-bold leading-tight">{title}</h1>
           {subtitle ? <p className="text-xs text-brand-200">{subtitle}</p> : null}
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-4 pb-28">{children}</main>
+      <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-4 pb-28 lg:max-w-6xl">{children}</main>
 
       <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-2 pt-1.5 backdrop-blur">
-        <div className="mx-auto flex max-w-2xl items-stretch justify-between">
+        <div className="mx-auto flex max-w-2xl items-stretch justify-between lg:max-w-6xl">
           {TABS.map((t) => {
             const active = t.id === tab;
             return (

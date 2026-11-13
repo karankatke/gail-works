@@ -9,7 +9,7 @@ It shares the same Supabase project and owner login as the attendance app, but l
 - **Rates** — final LOA rates for both contracts, PE (pipeline) and LMC (last mile). Search in trade language ("32", "1 inch", "meter"), a pipe rate matrix, and the full SOR description on every item. All rates show the document precision (2–3 decimals), never rounded to rupees.
 - **Log work** — a site board with a **plan** and **quick repeat**. Create activities with a target quantity from the work order, then tap **+ Today** each day to add progress. Quantities can be entered in **feet/inches** (including length × width × depth for excavation) and are converted to the SOR unit automatically.
 - **Progress** — cumulative work vs the LOA value, the next RA bill (value, GST, deductions, net), claimable by clear 7-day periods, item-wise quantities/sites/value, and labour cost from the attendance app.
-- **Estimate** — from Rates, tap **Estimate a project**. Add items in feet/inches, enter material cost and crew days, and see claimable at completion, labour cost, estimated profit and margin. Save estimates with a name/site and reopen them.
+- **Estimate** — from Rates, tap **Estimate a project**. Add items in feet/inches, then add material, crew days, a subcontract (per metre or per flat), drawings, conversion and miscellaneous costs. See claimable at completion, total cost, estimated profit and margin. Save estimates with a name/site and reopen them. The estimate sheet uses a wider two-column layout on laptops.
 - **More** — project value, RA bill plan and cutoffs, how the numbers work, account.
 
 Phone **back** closes any popup and leaves you in the app; the old X buttons are gone.
